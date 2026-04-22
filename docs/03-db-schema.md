@@ -87,11 +87,11 @@ CREATE TABLE events (
 - **`id` 보조 UNIQUE**: 단일 이벤트 참조 용이성 (DLQ 이관, 로그 식별).
 - **`uk_session_client_event`**: 중복 방지 핵심 제약. 클라이언트 재전송 시 `DataIntegrityViolationException` 발생 → 애플리케이션 무시.
 - **`idx_projection_status_retry`**: 아웃박스 워커가 `WHERE projection_status='PENDING' AND next_retry_at <= NOW() ORDER BY ... FOR UPDATE SKIP LOCKED` 조회 시 사용.
-- **`idx_session_received`**: `server_received_at` 기반 복원 ("특정 시점 t" 쿼리)에 사용.
+- **`idx_session_received`**: `server_received_at` 기반 복원 (과제 4.3 "특정 시점 t" 쿼리)에 사용.
 - **JSON 타입 선택 근거**:
   - 이벤트 타입이 7종으로 제한적, payload 스키마는 각 타입 내부에서 단순 → 완전 정규화 테이블 7개는 과설계.
   - MySQL 8.0 JSON은 이벤트 조회 쿼리(payload 내부 접근 거의 없음)에 충분.
-  - 트레이드오프: 페이로드 내부 검색/필터는 functional index 필요하나, 본 프로젝트 범위에서는 필요 없음.
+  - 트레이드오프: 페이로드 내부 검색/필터는 functional index 필요하나, 본 과제는 필요 없음.
 
 ### 2.4 snapshots
 ```sql
@@ -150,7 +150,7 @@ CREATE TABLE dead_letter_events (
 - `events.retry_count > MAX_RETRY` 도달 시 이관 (DELETE from events + INSERT here).
 - 운영자가 수동 재처리할 수 있도록 원본 payload 보존.
 
-## 3. 주요 쿼리
+## 3. 주요 쿼리 (과제 4.4 요구)
 
 ### 쿼리 1: 아웃박스 워커 이벤트 조회 (핫패스)
 ```sql

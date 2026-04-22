@@ -2,14 +2,17 @@
 
 ## 1. 프로젝트 배경
 
-**1:1 실시간 채팅 + 이벤트 기반 상태 복원** 서비스 설계 및 구현.
+Software Engineer(Backend) 사전 과제 — **1:1 실시간 채팅 + 이벤트 기반 상태 복원** 서비스 설계 및 구현.
 
-핵심 주제:
+과제 핵심 평가 포인트:
 - 실시간 통신 구현 (WebSocket)
 - 이벤트 소싱 기반 특정 시점 상태 복원(Determinism)
 - 중복 이벤트 / 순서 뒤바뀜 처리 전략
 - 수평 확장 / 관측 가능성 / 장애 대응 설계
 - DB 설계, 쿼리 최적화, REST API 설계
+
+**제출 기한:** 약 1주일 (2026-04-21 ~ 2026-04-28 가정)
+**개발 방식:** AI 활용 + 본인 설명 역량 확보 병행
 
 ---
 
@@ -30,7 +33,7 @@
 | 메트릭 | **Micrometer + Prometheus** | |
 | 시각화 | **Grafana** | 대시보드 3종 |
 | 로깅 | **Logback JSON + MDC** | traceId/spanId 주입 |
-| 추적 | **Micrometer Tracing + OpenTelemetry + Zipkin** | 분산 추적 |
+| 추적 | **Micrometer Tracing + OpenTelemetry + Zipkin** | 가산점 목적 |
 | 테스트 | **JUnit 5 + Testcontainers + k6** | 단위/통합/부하 |
 | 인증 | **쿼리 파라미터 기반 최소 식별** | Non-goals 일치 |
 | 아키텍처 | **단일 모듈 + 도메인별 패키지** | |
@@ -51,10 +54,10 @@
 | **순수 WebSocket** | 이벤트 스키마 자유 설계 (`clientEventId`, `sequence`) | Pub/Sub 직접 구현 필요 |
 | SSE + REST | 구현 단순 | 양방향 실시간 아님, 채팅 전형 패턴 아님 |
 
-**근거:** 핵심 주제가 **중복/순서/복원**이며, 이를 자체 이벤트 스키마(`clientEventId`, `sequence`, `clientTimestamp`)로 명시적으로 설계할 수 있어야 함. STOMP의 기본 프레임 위에 얹는 것보다 직접 제어 가능한 순수 WebSocket이 설계 자유도를 확보.
+**근거:** 과제 핵심 평가가 **중복/순서/복원**이며, 이를 자체 이벤트 스키마(`clientEventId`, `sequence`, `clientTimestamp`)로 명시적으로 설계할 수 있어야 함. STOMP의 기본 프레임 위에 얹는 것보다 직접 제어 가능한 순수 WebSocket이 평가 포인트와 직결.
 
 **결과:**
-- 메시지 프레임 포맷을 요구사항에 맞춤 설계
+- 메시지 프레임 포맷을 과제 요구사항에 맞춤 설계
 - Pub/Sub은 Redis로 보강 (ADR-005 참고)
 
 ---
@@ -76,14 +79,14 @@
 
 **근거:**
 1. **익숙한 스택으로 깊이 있는 설계 증명** — AI 활용 구현이지만 평가 인터뷰/리뷰에서 본인 언어로 설명할 수 있는 것이 중요.
-2. MySQL 8.0에도 `SELECT ... FOR UPDATE SKIP LOCKED`, JSON + Functional Index, CTE/Window 함수가 모두 있어 본 프로젝트 구현에 부족함 없음.
+2. MySQL 8.0에도 `SELECT ... FOR UPDATE SKIP LOCKED`, JSON + Functional Index, CTE/Window 함수가 모두 있어 과제 구현에 부족함 없음.
 3. `(session_id, sequence)` 기반 PK로 InnoDB clustered index를 활용하면 세션별 이벤트 순차 조회가 순차 I/O가 되어 복원 핫패스 성능 우수.
 4. PostgreSQL JSONB의 이점은 이벤트 payload 스키마가 매우 동적인 경우인데, 본 과제의 이벤트 타입은 5개 내외로 제한적 → JSON 타입으로 충분.
 
 **Temporal Tables 배제 사유 (MariaDB):**
-- 본 프로젝트의 본질은 Event Sourcing **정공법** 검증(이벤트 리플레이).
+- 과제의 본질은 Event Sourcing **정공법** 검증(이벤트 리플레이).
 - Temporal Tables는 CRUD + 히스토리 모델로 "패러다임 우회" 인상을 줌.
-- 단, 설계 문서의 "대안 검토" 섹션에 언급해 기술 선택지 폭을 보임.
+- 단, 설계 문서의 "대안 검토" 섹션에 언급해 가산점 획득.
 
 ---
 
@@ -133,9 +136,9 @@
 
 **근거:**
 1. 이벤트 insert와 projection 큐 enqueue가 **같은 트랜잭션** → 이중 쓰기 문제 원천 차단.
-2. 비동기 파이프라인의 재시도/DLQ/Idempotency/중복 실행 방지를 **DB 테이블 2개(`events`, `dead_letter_events`)로 가시화** — ERD + SQL로 설명 용이.
+2. 과제 4.2 요구항목(재시도/DLQ/Idempotency/중복 실행 방지)을 **DB 테이블 2개(`events`, `dead_letter_events`)로 가시화** — ERD + SQL로 설명 용이.
 3. MySQL 8.0의 `FOR UPDATE SKIP LOCKED`로 여러 워커가 경합 없이 병렬 처리 가능.
-4. Redis Streams는 실무 경험 있으나 **source of truth가 DB인 본 프로젝트 맥락에선 이중 쓰기 리스크 증가** → 채택 시 설계 문서가 오히려 장황해짐.
+4. Redis Streams는 실무 경험 있으나 **source of truth가 DB인 이 과제 맥락에선 이중 쓰기 리스크 증가** → 채택 시 설계 문서가 오히려 장황해짐.
 5. Kafka는 본인 미경험 + 일주일 ROI 낮음.
 
 **결과:**
@@ -170,10 +173,10 @@
 3. **최근 N개 메시지 캐시**: Sorted Set `session:{id}:recent`, score는 `sequence`, 재연결 시 빠른 전달
 
 **근거:**
-1. **"서버 수평 확장 시 세션 분산 및 상태 저장 전략"** 이 핵심 설계 주제 — 문서만 쓰기보다 구현으로 답하는 편이 설득력 압도적.
+1. 과제 4.2 설계 항목 **"서버 수평 확장 시 세션 분산 및 상태 저장 전략"** 이 평가 포인트 — 구현으로 답하는 편이 설득력 압도적.
 2. 본인 실무 경험 있음, 러닝 커브 없음.
-3. Redis 장애 대응 시나리오가 장애 대응 문서의 **좋은 소재** 제공.
-4. Prometheus/Grafana 대시보드가 풍성해져 "운영 대시보드" 요구를 직접 충족.
+3. Redis 장애 대응 시나리오가 과제 4.4 장애 대응 섹션의 **좋은 소재** 제공.
+4. Prometheus/Grafana 대시보드가 풍성해져 가산점 "운영 대시보드" 직접 타격.
 
 ---
 
@@ -182,17 +185,17 @@
 **결정:** 메트릭 + 로그 + 추적 풀셋 (Prometheus + Grafana + Zipkin)
 
 **대안 비교:**
-| 옵션 | 구성 | 소요 | 커버리지 |
+| 옵션 | 구성 | 일주일 소요 | 가산점 |
 |---|---|---|---|
 | A: 메트릭 중심 | Prometheus + Grafana + JSON 로그 | ~1일 | 중간 |
 | **B: 풀셋** | A + OpenTelemetry + Zipkin | ~2일 | 높음 |
 | C: LGTM 스택 | B + Loki + Tempo | ~3일 | 최고 (과투자) |
 
 **근거:**
-1. **"관측 가능성 설계(로그, 메트릭, 추적)"** 3요소 전부 구현.
-2. Option A는 실무 경험 있음 → Option B의 **추적 부분이 학습 포인트**.
+1. 과제 평가 항목 **"관측 가능성 설계(로그, 메트릭, 추적)"** 3요소 전부 구현.
+2. 본인 Option A는 경험 있음 → Option B의 **추적 부분이 학습 포인트** 겸 가산점.
 3. WebSocket 이벤트 수신 → projection 반영까지 trace로 추적 가능 → 이벤트 소싱 디버깅 실효성 입증.
-4. Zipkin은 Tempo 대비 Docker 구성 경량 → 제한된 기간 내에 안정적.
+4. Zipkin은 Tempo 대비 Docker 구성 경량 → 일주일 예산 안정적.
 
 **결과:**
 - Micrometer + Prometheus → 커스텀 메트릭 7종 이상
@@ -213,7 +216,7 @@
 | 헥사고날 | 포트/어댑터 명확 | 클래스 수 증가, 오버엔지니어링 |
 | 멀티 모듈 | 경계 강제 | 일주일 과투자 |
 
-**근거:** 제한된 개발 기간 내에 코드 리뷰 친화성을 확보하는 데 최적. 헥사고날/멀티모듈은 설계 문서의 "확장 경로"로 언급.
+**근거:** 일주일 + AI 활용 + 평가자 코드 리뷰 친화성에 최적. 헥사고날/멀티모듈은 설계 문서의 "확장 경로"로 언급.
 
 **구조:**
 ```
@@ -233,7 +236,7 @@ src/main/java/com/example/chat/
 
 **결정:** 쿼리 파라미터 기반 최소 식별 (`?sessionId=X&userId=Y`)
 
-**근거:** Non-goals에 "인증/인가 체계의 완결된 구현"이 포함됨 → 의도 준수. 설계 문서에 JWT/OAuth2 확장 경로 명시.
+**근거:** 과제 Non-goals에 "인증/인가 체계의 완결된 구현" 제외 명시 → 과제 의도 준수. 설계 문서에 JWT/OAuth2 확장 경로 명시.
 
 **결과:** `HandshakeInterceptor`에서 파라미터 추출 → `WebSocketSession.attributes` 저장.
 
@@ -243,7 +246,7 @@ src/main/java/com/example/chat/
 
 **결정:** 단위 + 통합(Testcontainers) + k6 부하 테스트
 
-**근거:** 통합 테스트와 부하 테스트 결과를 산출물에 포함. 장애 주입은 설계 문서로 대체.
+**근거:** 과제 가산점 "통합 테스트", "부하 테스트 결과" 직접 타격. 장애 주입은 설계 문서로 대체.
 
 **범위:**
 - **단위**: `EventReplayService` 결정론성, 중복/순서 필터링

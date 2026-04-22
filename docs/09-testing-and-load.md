@@ -186,7 +186,7 @@ export default function () {
   - 아웃박스 lag 최대/평균
   - 병목 분석 (만약 있다면)
 
-## 6. CI 설계 (선택 구현)
+## 6. CI 설계 (가산점, 구현은 선택)
 
 - GitHub Actions:
   - `./gradlew test` (Testcontainers 사용, docker 러너 필요)

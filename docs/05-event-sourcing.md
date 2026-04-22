@@ -200,11 +200,11 @@ function restoreAt(sessionId, at):
 2. **Tombstone + payload nullify**: `FORGET_USER` 이벤트를 기록하고, 해당 사용자의 기존 이벤트 payload를 `null`로 업데이트 (원본 메시지만 제거, 메타데이터는 유지)
 3. **Crypto-shredding + projection 재구축**: projection 테이블은 재구축으로 반영
 
-본 프로젝트에서는 **설계 문서에만 언급**, 구현은 제외.
+본 과제에서는 **설계 문서에만 언급**, 구현은 제외.
 
 ---
 
-## 6. 구현 범위
+## 6. 가산점 구현 범위
 
 - [x] Snapshot + Replay 하이브리드 **구현**
 - [x] Projection 비동기화 **구현** (DB 아웃박스)

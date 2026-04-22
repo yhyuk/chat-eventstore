@@ -46,6 +46,11 @@ Thumbs.db
 /docs/load-test-results/*.json
 !/docs/load-test-results/.gitkeep
 
+### Claude Code / OMC local state (must never be committed to the public repo) ###
+/.omc/
+/.claude/
+CLAUDE.md
+
 ### Secrets ###
 .env
 .env.*

@@ -180,11 +180,11 @@ HTTP /sessions/{id}/timeline
 - `/actuator/health/liveness` — 프로세스 생존
 - `/actuator/health/readiness` — 의존성 준비 완료 (Docker compose depends_on 대체)
 
-## 8. 요구 항목 매핑
+## 8. 설계 문서 평가 매핑
 
-| 요구 항목 | 대응 구현 |
+| 과제 요구 | 대응 구현 |
 |---|---|
 | "로그" | Logback JSON + MDC (traceId/spanId/sessionId/eventId) |
 | "메트릭" | Micrometer → Prometheus → Grafana 대시보드 3종 |
 | "추적" | Micrometer Tracing + OTel → Zipkin |
-| "운영 대시보드" | Grafana 대시보드 + 스크린샷 |
+| "운영 대시보드" (가산점) | Grafana 대시보드 + 스크린샷 |

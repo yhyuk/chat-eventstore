@@ -2,6 +2,7 @@
 .idea
 .vscode
 .git
+.omc
 docs
 scripts
 http

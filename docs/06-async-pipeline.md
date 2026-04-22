@@ -97,11 +97,11 @@ FOR UPDATE SKIP LOCKED
 - `retry_count >= MAX_RETRY (5)` 도달 시
 - 명시적 "재생 불가" 예외 (예: 역직렬화 불가능한 payload)
 
-### 3.2 DLQ 운영 API
+### 3.2 DLQ 운영 API (가산점)
 - `GET /admin/dlq` — 미처리 건 조회
 - `POST /admin/dlq/{id}/retry` — 수동 재처리 (events로 복원)
 - `DELETE /admin/dlq/{id}` — 영구 폐기
-- 관리자 전용 인증은 Non-goals라 생략, 설계 문서에만 언급
+- 관리자 전용 인증은 과제 Non-goals라 생략, 설계 문서에만 언급
 
 ### 3.3 메트릭
 - `chat.projection.dead_letter.total{reason}` — 카운터
@@ -193,7 +193,7 @@ FOR UPDATE SKIP LOCKED
 - 한도 초과 시 `ERROR` 프레임 + 일시 차단 (TTL 5초)
 - **토큰 버킷 또는 leaky bucket** 알고리즘 후일 도입
 
-### 9.3 구현 범위
+### 9.3 구현 범위 (본 과제)
 - 본 과제에서는 **문서에만 제안**, 실제 구현 생략 (일정 우선순위)
 
 ## 10. 확장 경로 (문서용)
