@@ -1,0 +1,15 @@
+.gradle
+.idea
+.vscode
+.git
+docs
+scripts
+http
+observability
+openapi
+src/test
+build/tmp
+build/reports
+build/test-results
+*.md
+!README.md

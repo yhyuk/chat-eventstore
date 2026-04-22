@@ -1,0 +1,120 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: chat-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: chat
+    command:
+      - --port=6306
+      - --default-authentication-plugin=caching_sha2_password
+      - --max-connections=200
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports: ["6306:6306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -P 6306 -uroot -proot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      retries: 20
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: chat-redis
+    command: ["redis-server", "--port", "6389"]
+    ports: ["6389:6389"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6389", "ping"]
+      interval: 5s
+      retries: 10
+
+  app1:
+    build: .
+    container_name: chat-app1
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_INSTANCE_ID: app1
+      SERVER_PORT: "7081"
+    ports: ["7081:7081"]
+    restart: unless-stopped
+
+  app2:
+    build: .
+    container_name: chat-app2
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      APP_INSTANCE_ID: app2
+      SERVER_PORT: "7082"
+    ports: ["7082:7082"]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: chat-prometheus
+    ports: ["9190:9190"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.listen-address=:9190
+      - --storage.tsdb.retention.time=6h
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: chat-grafana
+    ports: ["3100:3100"]
+    environment:
+      GF_SERVER_HTTP_PORT: "3100"
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: chat-mysql-exporter
+    command:
+      - --mysqld.username=root:root
+      - --mysqld.address=mysql:6306
+      - --web.listen-address=:9204
+    ports: ["9204:9204"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: chat-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://redis:6389"
+      REDIS_EXPORTER_WEB_LISTEN_ADDRESS: ":9221"
+    ports: ["9221:9221"]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: chat-zipkin
+    environment:
+      QUERY_PORT: "9211"
+    ports: ["9211:9211"]
+
+volumes:
+  mysql-data:

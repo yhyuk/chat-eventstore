@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:mysql://mysql:6306/chat?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    username: root
+    password: root
+  data:
+    redis:
+      host: redis
+      port: 6389
+
+management:
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9211/api/v2/spans

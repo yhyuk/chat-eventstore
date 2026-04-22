@@ -1,0 +1,3 @@
+### Restore timeline at specific point in time
+GET http://localhost:7081/sessions/1/timeline?at=2026-01-01T09:00:00Z
+Accept: application/json

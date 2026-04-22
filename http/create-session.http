@@ -1,0 +1,7 @@
+### D2 implementation target — keep file for now
+POST http://localhost:7081/sessions
+Content-Type: application/json
+
+{
+  "participantUserIds": ["alice", "bob"]
+}
