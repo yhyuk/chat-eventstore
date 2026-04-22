@@ -3,6 +3,7 @@ package com.example.chat.event.domain;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Generated;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 )
 @IdClass(EventId.class)
 @DynamicInsert
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -60,13 +62,16 @@ public class Event {
     private LocalDateTime serverReceivedAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "projection_status", nullable = false, length = 16)
+    @Column(name = "projection_status", length = 16, insertable = false)
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
     private ProjectionStatus projectionStatus;
 
-    @Column(name = "retry_count", nullable = false)
+    @Column(name = "retry_count", insertable = false)
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
     private Integer retryCount;
 
-    @Column(name = "next_retry_at", nullable = false)
+    @Column(name = "next_retry_at", insertable = false)
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
     private LocalDateTime nextRetryAt;
 
     @Column(name = "last_error", length = 1024)

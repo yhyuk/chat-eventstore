@@ -145,8 +145,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private void sendFrame(WebSocketSession webSocketSession, Object frameBody, String frameType) {
         try {
             String json = objectMapper.writeValueAsString(new FrameEnvelope(frameType, frameBody));
-            if (webSocketSession.isOpen()) {
-                webSocketSession.sendMessage(new TextMessage(json));
+            synchronized (webSocketSession) {
+                if (webSocketSession.isOpen()) {
+                    webSocketSession.sendMessage(new TextMessage(json));
+                }
             }
         } catch (IOException e) {
             log.warn("Send frame failed: wsId={}, frameType={}, error={}",

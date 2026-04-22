@@ -48,10 +48,14 @@ public class RedisMessageSubscriber implements MessageListener {
         if (!ws.isOpen()) {
             return;
         }
-        try {
-            ws.sendMessage(message);
-        } catch (IOException e) {
-            log.warn("Failed to send broadcast to WS: sessionId={}, wsId={}", sessionId, ws.getId(), e);
+        synchronized (ws) {
+            try {
+                if (ws.isOpen()) {
+                    ws.sendMessage(message);
+                }
+            } catch (IOException e) {
+                log.warn("Failed to send broadcast to WS: sessionId={}, wsId={}", sessionId, ws.getId(), e);
+            }
         }
     }
 

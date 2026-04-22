@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>chat-eventstore :: debug client</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --msn-blue-dark: #003399;
+    --msn-blue-mid: #0055cc;
+    --msn-blue-light: #4488ff;
+    --msn-title-grad: linear-gradient(180deg, #1a6aff 0%, #0033cc 40%, #002299 100%);
+    --msn-bg: #d4e4f7;
+    --msn-panel-bg: #ecf4ff;
+    --msn-border: #7aaad8;
+    --msn-border-dark: #336699;
+    --msn-bubble-me: #c8e0ff;
+    --msn-bubble-other: #ffffff;
+    --msn-bubble-border: #88aacc;
+    --msn-input-bg: #f5f9ff;
+    --msn-green: #00cc44;
+    --msn-gray: #aaaaaa;
+    --msn-red: #cc2200;
+    --msn-yellow: #ffcc00;
+    --log-bg: #0a0a0f;
+    --log-green: #00ff88;
+    --log-yellow: #ffdd00;
+    --log-red: #ff4444;
+    --log-dim: #336644;
+    --font-pixel: 'VT323', monospace;
+    --font-header: 'Press Start 2P', monospace;
+    --font-mono: 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--msn-bg);
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(100,160,255,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(0,80,200,0.1) 0%, transparent 50%);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  /* ── WINDOW CHROME ── */
+  .window {
+    background: var(--msn-panel-bg);
+    border: 2px solid var(--msn-border-dark);
+    border-radius: 6px 6px 4px 4px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.25), inset 1px 1px 0 rgba(255,255,255,0.8);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .title-bar {
+    background: var(--msn-title-grad);
+    padding: 5px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+
+  .title-bar-text {
+    font-family: var(--font-pixel);
+    font-size: 18px;
+    color: #ffffff;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    flex: 1;
+    letter-spacing: 1px;
+  }
+
+  .title-bar-controls {
+    display: flex;
+    gap: 3px;
+  }
+
+  .win-btn {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.3);
+    cursor: pointer;
+    font-size: 9px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(0,0,0,0.6);
+    font-weight: bold;
+  }
+  .win-btn.close { background: #ff5555; }
+  .win-btn.min   { background: #ffcc00; }
+  .win-btn.max   { background: #44cc44; }
+
+  /* ── TOP CONTROL BAR ── */
+  .control-bar {
+    padding: 8px 12px;
+    background: linear-gradient(180deg, #f0f6ff 0%, #ddeeff 100%);
+    border-bottom: 2px solid var(--msn-border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .control-label {
+    font-family: var(--font-pixel);
+    font-size: 15px;
+    color: var(--msn-blue-dark);
+  }
+
+  .control-input {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 4px 8px;
+    border: 2px solid var(--msn-border-dark);
+    border-radius: 3px;
+    background: white;
+    color: var(--msn-blue-dark);
+    width: 100px;
+    outline: none;
+  }
+  .control-input:focus { border-color: var(--msn-blue-light); box-shadow: 0 0 4px rgba(0,85,204,0.3); }
+
+  .btn {
+    font-family: var(--font-pixel);
+    font-size: 14px;
+    padding: 5px 12px;
+    border: 2px solid var(--msn-border-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: translateY(1px); }
+
+  .btn-primary {
+    background: linear-gradient(180deg, #5599ff 0%, #0044cc 100%);
+    color: white;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 0 #001a66;
+  }
+  .btn-primary:hover { background: linear-gradient(180deg, #77bbff 0%, #0055ee 100%); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-danger {
+    background: linear-gradient(180deg, #ff8866 0%, #cc2200 100%);
+    color: white;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 0 #661100;
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  .btn-danger:hover { background: linear-gradient(180deg, #ffaa88 0%, #dd3311 100%); }
+
+  .btn-edit {
+    background: linear-gradient(180deg, #ffee88 0%, #ccaa00 100%);
+    color: #442200;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+    box-shadow: 0 2px 0 #886600;
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  .btn-edit:hover { background: linear-gradient(180deg, #ffff99 0%, #ddbb11 100%); }
+
+  .btn-small {
+    font-size: 11px;
+    padding: 3px 7px;
+    background: linear-gradient(180deg, #eef4ff 0%, #ccdaee 100%);
+    color: var(--msn-blue-dark);
+    box-shadow: 0 1px 0 #7799bb;
+  }
+
+  .session-badge {
+    font-family: var(--font-pixel);
+    font-size: 14px;
+    color: var(--msn-blue-dark);
+    background: white;
+    border: 2px solid var(--msn-border);
+    border-radius: 3px;
+    padding: 3px 10px;
+  }
+
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    border: 1px solid rgba(0,0,0,0.2);
+    flex-shrink: 0;
+  }
+  .status-dot.online  { background: var(--msn-green); box-shadow: 0 0 4px var(--msn-green); }
+  .status-dot.offline { background: var(--msn-gray); }
+  .status-dot.connecting { background: var(--msn-yellow); animation: blink 0.8s infinite; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── DUAL PANEL ── */
+  .dual-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .panel-header {
+    background: linear-gradient(180deg, #ddeeff 0%, #bbddff 100%);
+    border-bottom: 2px solid var(--msn-border);
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-user {
+    font-family: var(--font-pixel);
+    font-size: 16px;
+    color: var(--msn-blue-dark);
+  }
+
+  .panel-endpoint {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #667799;
+    margin-left: auto;
+  }
+
+  .panel-ws-status {
+    font-family: var(--font-pixel);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    background: rgba(0,0,0,0.08);
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: white;
+    background-image: repeating-linear-gradient(
+      0deg, transparent, transparent 23px, rgba(180,210,255,0.15) 23px, rgba(180,210,255,0.15) 24px
+    );
+    min-height: 200px;
+    max-height: 320px;
+  }
+
+  .messages::-webkit-scrollbar { width: 8px; }
+  .messages::-webkit-scrollbar-track { background: #ddeeff; }
+  .messages::-webkit-scrollbar-thumb { background: var(--msn-border-dark); border-radius: 4px; }
+
+  .msg-row {
+    display: flex;
+    flex-direction: column;
+    max-width: 88%;
+    animation: msgIn 0.15s ease-out;
+  }
+  @keyframes msgIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform:none; } }
+
+  .msg-row.mine  { align-self: flex-end; align-items: flex-end; }
+  .msg-row.other { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--msn-bubble-border);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.4;
+    position: relative;
+    word-break: break-word;
+  }
+  .msg-row.mine  .bubble { background: var(--msn-bubble-me); border-color: #5599cc; }
+  .msg-row.other .bubble { background: var(--msn-bubble-other); }
+
+  .bubble.deleted {
+    background: #f5e0e0 !important;
+    border-color: #cc8888 !important;
+    color: #996666;
+    text-decoration: line-through;
+  }
+  .bubble.edited { border-left: 3px solid #ffaa00 !important; }
+
+  .bubble-sender {
+    font-family: var(--font-pixel);
+    font-size: 11px;
+    color: var(--msn-blue-dark);
+    margin-bottom: 2px;
+  }
+
+  .bubble-meta {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: #8899aa;
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+  }
+
+  .ack-badge {
+    display: inline-block;
+    font-size: 8px;
+    font-family: var(--font-pixel);
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-left: 3px;
+    vertical-align: middle;
+  }
+  .ack-badge.accepted  { background: #ccffcc; color: #006622; border: 1px solid #44aa44; }
+  .ack-badge.duplicate { background: #ffeecc; color: #886600; border: 1px solid #ccaa00; }
+  .ack-badge.pending   { background: #eeeeff; color: #554488; border: 1px solid #9988cc; }
+
+  .type-badge {
+    display: inline-block;
+    font-size: 8px;
+    font-family: var(--font-pixel);
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-left: 3px;
+  }
+  .type-badge.MESSAGE   { background: #cceeff; color: #004477; }
+  .type-badge.EDIT      { background: #fff0cc; color: #664400; }
+  .type-badge.DELETE    { background: #ffdddd; color: #880000; }
+  .type-badge.JOIN      { background: #ddffdd; color: #004400; }
+  .type-badge.LEAVE     { background: #eeeeee; color: #444444; }
+  .type-badge.PRESENCE  { background: #eeddff; color: #440088; }
+
+  .sys-msg {
+    align-self: center;
+    font-family: var(--font-pixel);
+    font-size: 11px;
+    color: #667799;
+    background: rgba(180,210,255,0.3);
+    border: 1px dashed var(--msn-border);
+    border-radius: 3px;
+    padding: 2px 10px;
+    text-align: center;
+  }
+
+  /* ── INPUT AREA ── */
+  .input-area {
+    border-top: 2px solid var(--msn-border);
+    background: linear-gradient(180deg, #f5f9ff 0%, #eaf2ff 100%);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .msg-input {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 5px 8px;
+    border: 2px solid var(--msn-border-dark);
+    border-radius: 3px;
+    background: white;
+    outline: none;
+    resize: none;
+    min-height: 32px;
+    max-height: 64px;
+  }
+  .msg-input:focus { border-color: var(--msn-blue-light); box-shadow: 0 0 4px rgba(0,85,204,0.2); }
+  .msg-input:disabled { background: #eee; opacity: 0.6; }
+
+  .action-row {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .seq-display {
+    font-family: var(--font-pixel);
+    font-size: 11px;
+    color: #667799;
+    margin-left: auto;
+  }
+
+  /* ── LOG PANEL ── */
+  .log-window {
+    flex-shrink: 0;
+  }
+
+  .log-body {
+    background: var(--log-bg);
+    padding: 8px 12px;
+    height: 160px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .log-body::-webkit-scrollbar { width: 6px; }
+  .log-body::-webkit-scrollbar-track { background: #111; }
+  .log-body::-webkit-scrollbar-thumb { background: #336644; border-radius: 3px; }
+
+  .log-entry { margin: 1px 0; word-break: break-all; }
+  .log-ts    { color: #336644; }
+  .log-tx    { color: var(--log-green); }
+  .log-rx    { color: var(--log-yellow); }
+  .log-err   { color: var(--log-red); }
+  .log-sys   { color: #5588aa; }
+
+  .log-toolbar {
+    background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%);
+    border-bottom: 1px solid #223344;
+    padding: 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .log-toolbar-text {
+    font-family: var(--font-pixel);
+    font-size: 13px;
+    color: var(--log-green);
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--msn-border), var(--msn-blue-light), var(--msn-border), transparent);
+    margin: 2px 0;
+  }
+
+  /* ── NOTIFICATION TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--msn-blue-dark);
+    color: white;
+    font-family: var(--font-pixel);
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 2px solid var(--msn-blue-light);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ── SCROLLBAR GLOBAL ── */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #ddeeff; }
+  ::-webkit-scrollbar-thumb { background: var(--msn-border-dark); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ── MAIN WINDOW ── -->
+<div class="window" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+
+  <!-- Title Bar -->
+  <div class="title-bar">
+    <div class="title-bar-controls">
+      <div class="win-btn close">x</div>
+      <div class="win-btn min">-</div>
+      <div class="win-btn max">+</div>
+    </div>
+    <div class="title-bar-text">chat-eventstore :: debug client v0.4</div>
+    <div style="font-family:var(--font-pixel);font-size:11px;color:rgba(255,255,255,0.7);">event sourcing powered</div>
+  </div>
+
+  <!-- Control Bar -->
+  <div class="control-bar">
+    <span class="control-label">SESSION</span>
+    <input id="sessionIdInput" class="control-input" type="number" placeholder="ID" min="1">
+    <button class="btn btn-primary" onclick="connectSession()">CONNECT</button>
+    <button class="btn btn-primary" onclick="createAndConnect()" id="createBtn">NEW SESSION</button>
+    <div id="sessionBadge" style="display:none" class="session-badge">session: <span id="sessionIdDisplay">-</span></div>
+    <button class="btn btn-small" onclick="disconnectAll()" id="disconnectBtn" style="display:none;margin-left:auto;">DISCONNECT ALL</button>
+  </div>
+
+  <!-- Dual Panels -->
+  <div class="dual-panels" style="padding:6px; flex:1; min-height:0;">
+
+    <!-- Alice Panel -->
+    <div class="window chat-panel" id="panelAlice">
+      <div class="title-bar" style="padding:4px 8px;">
+        <div class="title-bar-text" style="font-size:15px;">Alice</div>
+        <span class="status-dot offline" id="dotAlice"></span>
+        <span class="panel-ws-status" id="wsStatusAlice" style="color:rgba(255,255,255,0.8);">DISCONNECTED</span>
+        <span class="panel-endpoint">app1:7081</span>
+      </div>
+      <div class="messages" id="msgsAlice"></div>
+      <div class="input-area">
+        <div class="input-row">
+          <textarea class="msg-input" id="inputAlice" placeholder="Alice 메시지 입력..." disabled rows="1"
+            onkeydown="handleKey(event,'alice')"></textarea>
+          <button class="btn btn-primary" onclick="sendMessage('alice')" id="sendAlice" disabled>SEND</button>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-edit" onclick="editLast('alice')" id="editAlice" disabled>EDIT</button>
+          <button class="btn btn-danger" onclick="deleteLast('alice')" id="deleteAlice" disabled>DELETE</button>
+          <span class="seq-display">seq: <span id="seqAlice">0</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bob Panel -->
+    <div class="window chat-panel" id="panelBob">
+      <div class="title-bar" style="padding:4px 8px;">
+        <div class="title-bar-text" style="font-size:15px;">Bob</div>
+        <span class="status-dot offline" id="dotBob"></span>
+        <span class="panel-ws-status" id="wsStatusBob" style="color:rgba(255,255,255,0.8);">DISCONNECTED</span>
+        <span class="panel-endpoint">app2:7082</span>
+      </div>
+      <div class="messages" id="msgsBob"></div>
+      <div class="input-area">
+        <div class="input-row">
+          <textarea class="msg-input" id="inputBob" placeholder="Bob 메시지 입력..." disabled rows="1"
+            onkeydown="handleKey(event,'bob')"></textarea>
+          <button class="btn btn-primary" onclick="sendMessage('bob')" id="sendBob" disabled>SEND</button>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-edit" onclick="editLast('bob')" id="editBob" disabled>EDIT</button>
+          <button class="btn btn-danger" onclick="deleteLast('bob')" id="deleteBob" disabled>DELETE</button>
+          <span class="seq-display">seq: <span id="seqBob">0</span></span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /dual-panels -->
+
+</div><!-- /main window -->
+
+<div class="divider"></div>
+
+<!-- ── LOG WINDOW ── -->
+<div class="window log-window">
+  <div class="log-toolbar">
+    <span class="log-ts">[</span>
+    <span class="log-toolbar-text">RAW FRAME LOG</span>
+    <span class="log-ts">]</span>
+    <span style="font-family:var(--font-mono);font-size:10px;color:#336644;margin-left:8px;">
+      <span style="color:var(--log-green)">→ TX</span>
+      &nbsp;
+      <span style="color:var(--log-yellow)">← RX</span>
+      &nbsp;
+      <span style="color:var(--log-red)">!! ERR</span>
+    </span>
+    <button class="btn btn-small" onclick="clearLog()"
+      style="margin-left:auto;background:#1a2a1a;color:var(--log-green);border-color:#336644;font-size:11px;padding:2px 8px;">
+      CLEAR
+    </button>
+  </div>
+  <div class="log-body" id="logBody">
+    <div class="log-entry log-sys">[SYSTEM] chat-eventstore debug client ready. Create or connect a session to begin.</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── STATE ──
+const state = {
+  sessionId: null,
+  alice: { ws: null, seq: 0, sentMessages: [] },
+  bob:   { ws: null, seq: 0, sentMessages: [] },
+};
+
+const ENDPOINTS = {
+  alice: { http: 'http://localhost:7081', ws: 'ws://localhost:7081' },
+  bob:   { http: 'http://localhost:7082', ws: 'ws://localhost:7082' },
+};
+
+// ── SESSION ──
+async function createAndConnect() {
+  logSys('Creating new session via POST /sessions...');
+  try {
+    // 1. 세션 생성
+    const res = await fetch('http://localhost:7081/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const sid = data.sessionId ?? data.id ?? data.data?.sessionId;
+    if (!sid) throw new Error('No sessionId in response: ' + JSON.stringify(data));
+    logSys(`Session created: id=${sid}`);
+
+    // 2. alice / bob join (participant 등록 — WebSocket 핸드셰이크 통과에 필요)
+    for (const userId of ['alice', 'bob']) {
+      const joinRes = await fetch(`http://localhost:7081/sessions/${sid}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!joinRes.ok) throw new Error(`JOIN ${userId} HTTP ${joinRes.status}`);
+      logSys(`Joined: userId=${userId}, sessionId=${sid}`);
+    }
+
+    document.getElementById('sessionIdInput').value = sid;
+    connectSession(sid);
+  } catch (e) {
+    logErr(`Failed to create session: ${e.message}`);
+    showToast('Session creation failed: ' + e.message);
+  }
+}
+
+function connectSession(overrideSid) {
+  const sid = overrideSid ?? parseInt(document.getElementById('sessionIdInput').value);
+  if (!sid || isNaN(sid)) { showToast('Session ID를 입력하세요.'); return; }
+  state.sessionId = sid;
+
+  document.getElementById('sessionBadge').style.display = '';
+  document.getElementById('sessionIdDisplay').textContent = sid;
+  document.getElementById('disconnectBtn').style.display = '';
+
+  connectWs('alice', sid);
+  connectWs('bob', sid);
+}
+
+// ── WEBSOCKET ──
+function connectWs(user, sessionId) {
+  const ep = ENDPOINTS[user];
+  const url = `${ep.ws}/ws/chat?sessionId=${sessionId}&userId=${user}&lastSequence=0`;
+  setWsStatus(user, 'connecting');
+  logSys(`[${user.toUpperCase()}] Connecting to ${url}`);
+
+  const ws = new WebSocket(url);
+  state[user].ws = ws;
+  state[user].seq = 0;
+  state[user].sentMessages = [];
+  updateSeqDisplay(user);
+
+  ws.onopen = () => {
+    setWsStatus(user, 'online');
+    enablePanel(user, true);
+    addSysMsg(user, `Connected to ${ep.ws}`);
+    logSys(`[${user.toUpperCase()}] WebSocket OPEN`);
+  };
+
+  ws.onmessage = (e) => {
+    handleIncoming(user, e.data);
+  };
+
+  ws.onerror = (e) => {
+    logErr(`[${user.toUpperCase()}] WebSocket ERROR`);
+  };
+
+  ws.onclose = (e) => {
+    setWsStatus(user, 'offline');
+    enablePanel(user, false);
+    addSysMsg(user, `Disconnected (code: ${e.code})`);
+    logSys(`[${user.toUpperCase()}] WebSocket CLOSED (code=${e.code})`);
+  };
+}
+
+function disconnectAll() {
+  ['alice', 'bob'].forEach(u => {
+    if (state[u].ws) {
+      state[u].ws.close();
+      state[u].ws = null;
+    }
+  });
+  document.getElementById('disconnectBtn').style.display = 'none';
+  document.getElementById('sessionBadge').style.display = 'none';
+  state.sessionId = null;
+}
+
+// ── INCOMING FRAMES ──
+function handleIncoming(user, raw) {
+  logRx(`[${user.toUpperCase()}] ${raw}`);
+  let frame;
+  try { frame = JSON.parse(raw); } catch { return; }
+
+  const ft = frame.frameType;
+
+  if (ft === 'ACK') {
+    // ACK: { frameType, body: { clientEventId, status, ... } }
+    const ack = frame.body ?? frame;
+    updateAck(user, ack.clientEventId, ack.status);
+  } else if (ft === 'EVENT') {
+    // EVENT: { frameType, body: { frameType, event: {...} } }
+    const ev = frame.body?.event ?? frame.event ?? frame.body;
+    renderEvent(user, ev);
+  } else if (ft === 'PRESENCE') {
+    // PRESENCE: { frameType, body: { userId, status } }
+    handlePresence(user, frame.body ?? frame);
+  } else if (ft === 'ERROR') {
+    const err = frame.body ?? frame;
+    logErr(`[${user.toUpperCase()}] ERROR ${err.code}: ${err.message}`);
+    addSysMsg(user, `ERROR: ${err.code} - ${err.message}`);
+  }
+}
+
+function renderEvent(user, ev) {
+  const isMine = ev.userId === user;
+
+  if (isMine) {
+    // 내가 보낸 메시지: 낙관적 렌더링된 버블이 이미 있으면 메타만 업데이트
+    const existing = document.querySelector(
+      `#msgs${capitalize(user)} [data-cid="${ev.clientEventId}"]`
+    );
+    if (existing) {
+      updateBubbleFromEvent(user, ev);
+      return;
+    }
+    // 없으면 (예: resume 배치로 온 경우) 우측에 렌더링
+  }
+
+  // 상대방 메시지 또는 resume으로 온 내 메시지 — 패널에 렌더링
+  addBubble(user, {
+    clientEventId: ev.clientEventId,
+    userId: ev.userId,
+    type: ev.type,
+    content: ev.payload?.content ?? JSON.stringify(ev.payload),
+    seq: ev.sequence,
+    ackStatus: null,
+    mine: isMine,
+    targetClientEventId: ev.payload?.targetClientEventId,
+  });
+}
+
+function updateBubbleFromEvent(user, ev) {
+  const bubbleEl = document.querySelector(`#msgsAlice [data-cid="${ev.clientEventId}"], #msgsBob [data-cid="${ev.clientEventId}"]`);
+  if (!bubbleEl) return;
+  const metaEl = bubbleEl.querySelector('.bubble-meta');
+  if (metaEl) {
+    metaEl.innerHTML = buildMeta(ev.sequence, ev.type, 'ACCEPTED');
+  }
+
+  if (ev.type === 'EDIT') {
+    const targetBubble = findBubbleByCid(user, ev.payload?.targetClientEventId);
+    if (targetBubble) {
+      const b = targetBubble.querySelector('.bubble');
+      if (b) {
+        b.classList.add('edited');
+        const contentEl = b.querySelector('.bubble-content');
+        if (contentEl) contentEl.textContent = ev.payload?.content ?? '';
+      }
+    }
+  } else if (ev.type === 'DELETE') {
+    const targetBubble = findBubbleByCid(user, ev.payload?.targetClientEventId);
+    if (targetBubble) {
+      const b = targetBubble.querySelector('.bubble');
+      if (b) { b.classList.add('deleted'); b.querySelector('.bubble-content').textContent = '[deleted]'; }
+    }
+  }
+}
+
+function handlePresence(fromUser, frame) {
+  // Presence broadcast goes to both panels
+  ['alice', 'bob'].forEach(u => {
+    addSysMsg(u, `${frame.userId} is now ${frame.status}`);
+  });
+  // Update dot if it's about the other user
+  if (frame.userId === 'alice') setPresenceDot('alice', frame.status);
+  if (frame.userId === 'bob')   setPresenceDot('bob', frame.status);
+}
+
+// ── SEND ──
+function sendMessage(user) {
+  const ws = state[user].ws;
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('WebSocket not connected'); return; }
+
+  const inputEl = document.getElementById(`input${capitalize(user)}`);
+  const content = inputEl.value.trim();
+  if (!content) return;
+
+  state[user].seq++;
+  const cid = crypto.randomUUID();
+  const frame = {
+    clientEventId: cid,
+    sequence: state[user].seq,
+    type: 'MESSAGE',
+    payload: { content },
+    clientTimestamp: new Date().toISOString(),
+    userId: user,
+  };
+
+  ws.send(JSON.stringify(frame));
+  logTx(`[${user.toUpperCase()}] ${JSON.stringify(frame)}`);
+  updateSeqDisplay(user);
+
+  // Optimistic render
+  addBubble(user, { clientEventId: cid, userId: user, type: 'MESSAGE', content, seq: state[user].seq, ackStatus: 'pending', mine: true });
+  state[user].sentMessages.push({ cid, seq: state[user].seq, content });
+
+  inputEl.value = '';
+}
+
+function editLast(user) {
+  const msgs = state[user].sentMessages;
+  if (!msgs.length) { showToast('보낸 메시지가 없습니다.'); return; }
+  const last = msgs[msgs.length - 1];
+  const newContent = prompt(`Edit message (seq:${last.seq}):`, last.content);
+  if (!newContent || newContent === last.content) return;
+
+  const ws = state[user].ws;
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('WebSocket not connected'); return; }
+
+  state[user].seq++;
+  const cid = crypto.randomUUID();
+  const frame = {
+    clientEventId: cid,
+    sequence: state[user].seq,
+    type: 'EDIT',
+    payload: { targetClientEventId: last.cid, content: newContent },
+    clientTimestamp: new Date().toISOString(),
+    userId: user,
+  };
+
+  ws.send(JSON.stringify(frame));
+  logTx(`[${user.toUpperCase()}] ${JSON.stringify(frame)}`);
+  updateSeqDisplay(user);
+  state[user].sentMessages.push({ cid, seq: state[user].seq, content: newContent });
+
+  // Optimistic update bubble
+  const targetBubble = findBubbleByCid(user, last.cid);
+  if (targetBubble) {
+    const b = targetBubble.querySelector('.bubble');
+    if (b) {
+      b.classList.add('edited');
+      b.querySelector('.bubble-content').textContent = newContent;
+    }
+  }
+  // Add tombstone row
+  addBubble(user, { clientEventId: cid, userId: user, type: 'EDIT', content: `EDIT -> "${newContent}"`, seq: state[user].seq, ackStatus: 'pending', mine: true, isTombstone: true });
+}
+
+function deleteLast(user) {
+  const msgs = state[user].sentMessages;
+  if (!msgs.length) { showToast('보낸 메시지가 없습니다.'); return; }
+  const last = msgs[msgs.length - 1];
+  if (!confirm(`Delete message (seq:${last.seq}): "${last.content}"?`)) return;
+
+  const ws = state[user].ws;
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('WebSocket not connected'); return; }
+
+  state[user].seq++;
+  const cid = crypto.randomUUID();
+  const frame = {
+    clientEventId: cid,
+    sequence: state[user].seq,
+    type: 'DELETE',
+    payload: { targetClientEventId: last.cid },
+    clientTimestamp: new Date().toISOString(),
+    userId: user,
+  };
+
+  ws.send(JSON.stringify(frame));
+  logTx(`[${user.toUpperCase()}] ${JSON.stringify(frame)}`);
+  updateSeqDisplay(user);
+
+  // Optimistic update
+  const targetBubble = findBubbleByCid(user, last.cid);
+  if (targetBubble) {
+    const b = targetBubble.querySelector('.bubble');
+    if (b) { b.classList.add('deleted'); b.querySelector('.bubble-content').textContent = '[deleted]'; }
+  }
+  addBubble(user, { clientEventId: cid, userId: user, type: 'DELETE', content: `DELETE -> seq:${last.seq}`, seq: state[user].seq, ackStatus: 'pending', mine: true, isTombstone: true });
+  state[user].sentMessages = msgs.filter(m => m.cid !== last.cid);
+}
+
+// ── DOM HELPERS ──
+function addBubble(user, { clientEventId, userId, type, content, seq, ackStatus, mine, isTombstone, targetClientEventId }) {
+  const container = document.getElementById(`msgs${capitalize(user)}`);
+  const row = document.createElement('div');
+  row.className = `msg-row ${mine ? 'mine' : 'other'}`;
+  row.dataset.cid = clientEventId;
+
+  if (isTombstone) {
+    row.innerHTML = `
+      <div class="bubble" data-cid="${clientEventId}" style="background:#f5f5dd;border-style:dashed;font-size:11px;color:#888;">
+        <span class="bubble-content">${escHtml(content)}</span>
+        <div class="bubble-meta">${buildMeta(seq, type, ackStatus)}</div>
+      </div>`;
+  } else {
+    if (!mine) {
+      row.innerHTML = `<div class="bubble-sender">${escHtml(userId)}</div>`;
+    }
+    row.innerHTML += `
+      <div class="bubble" data-cid="${clientEventId}">
+        <span class="bubble-content">${escHtml(content)}</span>
+        <div class="bubble-meta">${buildMeta(seq, type, ackStatus)}</div>
+      </div>`;
+  }
+
+  container.appendChild(row);
+  container.scrollTop = container.scrollHeight;
+}
+
+function buildMeta(seq, type, ackStatus) {
+  const ackHtml = ackStatus
+    ? `<span class="ack-badge ${ackStatus.toLowerCase()}">${ackStatus === 'pending' ? '...' : ackStatus}</span>`
+    : '';
+  return `seq:${seq} <span class="type-badge ${type}">${type}</span>${ackHtml}`;
+}
+
+function updateAck(user, clientEventId, status) {
+  const allPanels = document.querySelectorAll(`#msgsAlice [data-cid="${clientEventId}"], #msgsBob [data-cid="${clientEventId}"]`);
+  allPanels.forEach(bubbleEl => {
+    const metaEl = bubbleEl.querySelector('.bubble-meta');
+    if (!metaEl) return;
+    const ackEl = metaEl.querySelector('.ack-badge');
+    if (ackEl) {
+      ackEl.className = `ack-badge ${status === 'ACCEPTED' ? 'accepted' : 'duplicate'}`;
+      ackEl.textContent = status === 'ACCEPTED' ? 'ACK' : 'DUP';
+    }
+  });
+}
+
+function findBubbleByCid(user, cid) {
+  if (!cid) return null;
+  const container = document.getElementById(`msgs${capitalize(user)}`);
+  return container.querySelector(`[data-cid="${cid}"]`)?.closest('.msg-row') ?? null;
+}
+
+function addSysMsg(user, text) {
+  const container = document.getElementById(`msgs${capitalize(user)}`);
+  const el = document.createElement('div');
+  el.className = 'sys-msg';
+  el.textContent = text;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function setWsStatus(user, status) {
+  const dot = document.getElementById(`dot${capitalize(user)}`);
+  const label = document.getElementById(`wsStatus${capitalize(user)}`);
+  dot.className = 'status-dot ' + status;
+  const map = { online: 'ONLINE', offline: 'DISCONNECTED', connecting: 'CONNECTING...' };
+  label.textContent = map[status] ?? status.toUpperCase();
+}
+
+function setPresenceDot(user, status) {
+  const dot = document.getElementById(`dot${capitalize(user)}`);
+  dot.className = 'status-dot ' + (status === 'ONLINE' ? 'online' : 'offline');
+}
+
+function enablePanel(user, enabled) {
+  const cap = capitalize(user);
+  document.getElementById(`input${cap}`).disabled = !enabled;
+  document.getElementById(`send${cap}`).disabled = !enabled;
+  document.getElementById(`edit${cap}`).disabled = !enabled;
+  document.getElementById(`delete${cap}`).disabled = !enabled;
+}
+
+function updateSeqDisplay(user) {
+  document.getElementById(`seq${capitalize(user)}`).textContent = state[user].seq;
+}
+
+function handleKey(e, user) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendMessage(user);
+  }
+}
+
+// ── LOG ──
+function log(cls, text) {
+  const body = document.getElementById('logBody');
+  const ts = new Date().toISOString().substring(11, 23);
+  const el = document.createElement('div');
+  el.className = `log-entry ${cls}`;
+  el.innerHTML = `<span class="log-ts">[${ts}]</span> ${escHtml(text)}`;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+function logTx(t)  { log('log-tx', t); }
+function logRx(t)  { log('log-rx', t); }
+function logErr(t) { log('log-err', t); }
+function logSys(t) { log('log-sys', t); }
+function clearLog() { document.getElementById('logBody').innerHTML = '<div class="log-entry log-sys">[SYSTEM] Log cleared.</div>'; }
+
+// ── UTIL ──
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
