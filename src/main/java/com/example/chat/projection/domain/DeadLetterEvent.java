@@ -27,6 +27,10 @@ public class DeadLetterEvent {
     @Column(name = "session_id", nullable = false)
     private Long sessionId;
 
+    // Added in V6 so DLQ retry can locate the original event via (session_id, sequence).
+    @Column(name = "sequence", nullable = false)
+    private Long sequence;
+
     // Stored as raw String so DLQ records survive future EventType enum changes
     @Column(name = "event_type", nullable = false, length = 20)
     private String eventType;

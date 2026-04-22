@@ -53,6 +53,7 @@ class ProjectionRepositoriesTest extends AbstractIntegrationTest {
         DeadLetterEvent dle = DeadLetterEvent.builder()
                 .originalEventId(999L)
                 .sessionId(10L)
+                .sequence(7L)
                 .eventType("MESSAGE")
                 .payload("{\"text\":\"fail\"}")
                 .errorMessage("processing failed")
