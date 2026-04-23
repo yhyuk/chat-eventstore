@@ -1,0 +1,468 @@
+openapi: 3.0.1
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:7081
+  description: Generated server url
+paths:
+  /sessions:
+    get:
+      tags:
+      - session-controller
+      operationId: listSessions
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - ENDED
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: participant
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SessionListResponse"
+    post:
+      tags:
+      - session-controller
+      operationId: createSession
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreateSessionResponse"
+  /sessions/{sessionId}/join:
+    post:
+      tags:
+      - session-controller
+      operationId: joinSession
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinSessionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JoinSessionResponse"
+  /sessions/{sessionId}/events:
+    post:
+      tags:
+      - session-event-controller
+      operationId: append
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppendEventRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AppendEventResponse"
+  /sessions/{sessionId}/end:
+    post:
+      tags:
+      - session-controller
+      operationId: endSession
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EndSessionResponse"
+  /admin/projections/rebuild:
+    post:
+      tags:
+      - admin-projection-controller
+      operationId: rebuild
+      parameters:
+      - name: sessionId
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RebuildResult"
+  /admin/dlq/{id}/retry:
+    post:
+      tags:
+      - dlq-admin-controller
+      operationId: retry
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+  /sessions/{id}/timeline:
+    get:
+      tags:
+      - session-timeline-controller
+      operationId: getTimeline
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: at
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TimelineResponse"
+  /admin/dlq:
+    get:
+      tags:
+      - dlq-admin-controller
+      operationId: list
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DlqEventResponse"
+  /admin/dlq/{id}:
+    delete:
+      tags:
+      - dlq-admin-controller
+      operationId: discard
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    CreateSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - ENDED
+        createdAt:
+          type: string
+          format: date-time
+    JoinSessionRequest:
+      required:
+      - userId
+      type: object
+      properties:
+        userId:
+          maxLength: 64
+          minLength: 0
+          type: string
+    JoinSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+          format: int64
+        userId:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+    AppendEventRequest:
+      required:
+      - clientEventId
+      - clientTimestamp
+      - sequence
+      - type
+      - userId
+      type: object
+      properties:
+        clientEventId:
+          type: string
+        userId:
+          type: string
+        sequence:
+          type: integer
+          format: int64
+        type:
+          type: string
+          enum:
+          - MESSAGE
+          - JOIN
+          - LEAVE
+          - DISCONNECT
+          - RECONNECT
+          - EDIT
+          - DELETE
+        payload:
+          type: object
+          additionalProperties:
+            type: object
+        clientTimestamp:
+          type: string
+          format: date-time
+    AppendEventResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        eventId:
+          type: integer
+          format: int64
+        sequence:
+          type: integer
+          format: int64
+        existingEventId:
+          type: integer
+          format: int64
+        existingSequence:
+          type: integer
+          format: int64
+    EndSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - ENDED
+        endedAt:
+          type: string
+          format: date-time
+    RebuildResult:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+          format: int64
+        replayedEventCount:
+          type: integer
+          format: int32
+        lastSequence:
+          type: integer
+          format: int64
+        snapshotVersion:
+          type: integer
+          format: int32
+    SessionListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionSummary"
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    SessionSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - ENDED
+        createdAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        lastSequence:
+          type: integer
+          format: int64
+    MessageState:
+      type: object
+      properties:
+        eventId:
+          type: integer
+          format: int64
+        sequence:
+          type: integer
+          format: int64
+        userId:
+          type: string
+        text:
+          type: string
+        status:
+          type: string
+        serverReceivedAt:
+          type: string
+          format: date-time
+    ParticipantState:
+      type: object
+      properties:
+        userId:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        presence:
+          type: string
+    TimelineResponse:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+          format: int64
+        at:
+          type: string
+          format: date-time
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParticipantState"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageState"
+        restoredFromSnapshot:
+          type: boolean
+        snapshotVersion:
+          type: integer
+          format: int32
+        replayedEventCount:
+          type: integer
+          format: int32
+    DlqEventResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        originalEventId:
+          type: integer
+          format: int64
+        sessionId:
+          type: integer
+          format: int64
+        sequence:
+          type: integer
+          format: int64
+        eventType:
+          type: string
+        errorMessage:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        movedAt:
+          type: string
+          format: date-time
