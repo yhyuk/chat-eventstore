@@ -577,9 +577,22 @@
 // ── STATE ──
 const state = {
   sessionId: null,
-  alice: { ws: null, seq: 0, sentMessages: [] },
-  bob:   { ws: null, seq: 0, sentMessages: [] },
+  // sequence is session-wide monotonic per server DDL (PK = session_id, sequence)
+  sessionSeq: 0,
+  alice: { ws: null, sentMessages: [] },
+  bob:   { ws: null, sentMessages: [] },
 };
+
+function nextSeq() {
+  state.sessionSeq += 1;
+  return state.sessionSeq;
+}
+
+function observeRemoteSeq(sequence) {
+  if (typeof sequence === 'number' && sequence > state.sessionSeq) {
+    state.sessionSeq = sequence;
+  }
+}
 
 const ENDPOINTS = {
   alice: { http: 'http://localhost:7081', ws: 'ws://localhost:7081' },
@@ -630,6 +643,7 @@ function connectSession(overrideSid) {
   document.getElementById('sessionIdDisplay').textContent = sid;
   document.getElementById('disconnectBtn').style.display = '';
 
+  state.sessionSeq = 0;
   connectWs('alice', sid);
   connectWs('bob', sid);
 }
@@ -643,7 +657,6 @@ function connectWs(user, sessionId) {
 
   const ws = new WebSocket(url);
   state[user].ws = ws;
-  state[user].seq = 0;
   state[user].sentMessages = [];
   updateSeqDisplay(user);
 
@@ -709,6 +722,11 @@ function handleIncoming(user, raw) {
 }
 
 function renderEvent(user, ev) {
+  // Keep session-wide sequence in lockstep with whatever the server has accepted.
+  observeRemoteSeq(ev.sequence);
+  updateSeqDisplay('alice');
+  updateSeqDisplay('bob');
+
   const isMine = ev.userId === user;
 
   if (isMine) {
@@ -782,11 +800,11 @@ function sendMessage(user) {
   const content = inputEl.value.trim();
   if (!content) return;
 
-  state[user].seq++;
+  const seq = nextSeq();
   const cid = crypto.randomUUID();
   const frame = {
     clientEventId: cid,
-    sequence: state[user].seq,
+    sequence: seq,
     type: 'MESSAGE',
     payload: { content },
     clientTimestamp: new Date().toISOString(),
@@ -798,8 +816,8 @@ function sendMessage(user) {
   updateSeqDisplay(user);
 
   // Optimistic render
-  addBubble(user, { clientEventId: cid, userId: user, type: 'MESSAGE', content, seq: state[user].seq, ackStatus: 'pending', mine: true });
-  state[user].sentMessages.push({ cid, seq: state[user].seq, content });
+  addBubble(user, { clientEventId: cid, userId: user, type: 'MESSAGE', content, seq, ackStatus: 'pending', mine: true });
+  state[user].sentMessages.push({ cid, seq, content });
 
   inputEl.value = '';
 }
@@ -814,11 +832,11 @@ function editLast(user) {
   const ws = state[user].ws;
   if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('WebSocket not connected'); return; }
 
-  state[user].seq++;
+  const seq = nextSeq();
   const cid = crypto.randomUUID();
   const frame = {
     clientEventId: cid,
-    sequence: state[user].seq,
+    sequence: seq,
     type: 'EDIT',
     payload: { targetClientEventId: last.cid, content: newContent },
     clientTimestamp: new Date().toISOString(),
@@ -828,7 +846,7 @@ function editLast(user) {
   ws.send(JSON.stringify(frame));
   logTx(`[${user.toUpperCase()}] ${JSON.stringify(frame)}`);
   updateSeqDisplay(user);
-  state[user].sentMessages.push({ cid, seq: state[user].seq, content: newContent });
+  state[user].sentMessages.push({ cid, seq, content: newContent });
 
   // Optimistic update bubble
   const targetBubble = findBubbleByCid(user, last.cid);
@@ -840,7 +858,7 @@ function editLast(user) {
     }
   }
   // Add tombstone row
-  addBubble(user, { clientEventId: cid, userId: user, type: 'EDIT', content: `EDIT -> "${newContent}"`, seq: state[user].seq, ackStatus: 'pending', mine: true, isTombstone: true });
+  addBubble(user, { clientEventId: cid, userId: user, type: 'EDIT', content: `EDIT -> "${newContent}"`, seq, ackStatus: 'pending', mine: true, isTombstone: true });
 }
 
 function deleteLast(user) {
@@ -852,11 +870,11 @@ function deleteLast(user) {
   const ws = state[user].ws;
   if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('WebSocket not connected'); return; }
 
-  state[user].seq++;
+  const seq = nextSeq();
   const cid = crypto.randomUUID();
   const frame = {
     clientEventId: cid,
-    sequence: state[user].seq,
+    sequence: seq,
     type: 'DELETE',
     payload: { targetClientEventId: last.cid },
     clientTimestamp: new Date().toISOString(),
@@ -873,7 +891,7 @@ function deleteLast(user) {
     const b = targetBubble.querySelector('.bubble');
     if (b) { b.classList.add('deleted'); b.querySelector('.bubble-content').textContent = '[deleted]'; }
   }
-  addBubble(user, { clientEventId: cid, userId: user, type: 'DELETE', content: `DELETE -> seq:${last.seq}`, seq: state[user].seq, ackStatus: 'pending', mine: true, isTombstone: true });
+  addBubble(user, { clientEventId: cid, userId: user, type: 'DELETE', content: `DELETE -> seq:${last.seq}`, seq, ackStatus: 'pending', mine: true, isTombstone: true });
   state[user].sentMessages = msgs.filter(m => m.cid !== last.cid);
 }
 
@@ -962,7 +980,9 @@ function enablePanel(user, enabled) {
 }
 
 function updateSeqDisplay(user) {
-  document.getElementById(`seq${capitalize(user)}`).textContent = state[user].seq;
+  // sequence is session-wide; show the same value on both panels for visibility.
+  const el = document.getElementById(`seq${capitalize(user)}`);
+  if (el) el.textContent = state.sessionSeq;
 }
 
 function handleKey(e, user) {

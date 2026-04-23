@@ -4,8 +4,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
@@ -35,6 +39,26 @@ public class GlobalExceptionHandler {
         log.warn("Malformed request body: {}", ex.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.status())
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "Malformed request body"));
+    }
+
+    // 4xx client input errors: log at WARN (expected, not a server defect).
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            HttpRequestMethodNotSupportedException.class
+    })
+    public ResponseEntity<ErrorResponse> handleBadRequest(Exception ex) {
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity.status(ErrorCode.INVALID_REQUEST.status())
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, ex.getMessage()));
+    }
+
+    // 404 for unmapped static resources / paths: log at DEBUG to avoid noise.
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException ex) {
+        log.debug("Resource not found: {}", ex.getResourcePath());
+        return ResponseEntity.status(ErrorCode.INVALID_REQUEST.status())
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "Not found"));
     }
 
     @ExceptionHandler(Exception.class)

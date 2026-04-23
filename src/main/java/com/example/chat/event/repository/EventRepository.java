@@ -2,6 +2,7 @@ package com.example.chat.event.repository;
 
 import com.example.chat.event.domain.Event;
 import com.example.chat.event.domain.EventId;
+import com.example.chat.event.domain.ProjectionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -44,6 +45,13 @@ public interface EventRepository extends JpaRepository<Event, EventId> {
             nativeQuery = true
     )
     List<EventIdProjection> fetchPendingEventIds(@Param("limit") int limit);
+
+    // Gauge support: count PENDING events for outbox lag metrics.
+    long countByProjectionStatus(ProjectionStatus projectionStatus);
+
+    // Gauge support: oldest PENDING event's server_received_at for lag calculation.
+    @Query("SELECT MIN(e.serverReceivedAt) FROM Event e WHERE e.projectionStatus = 'PENDING'")
+    Optional<LocalDateTime> findOldestPendingServerReceivedAt();
 
     // Targeted state-field UPDATE; business columns (payload, user_id, etc.) are never touched.
     @Modifying(clearAutomatically = true)
