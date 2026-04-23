@@ -28,6 +28,75 @@
  └─────────────────┘
 ```
 
+아래는 핵심 엔티티 관계도입니다.
+
+```mermaid
+erDiagram
+    sessions ||--o{ participants : has
+    sessions ||--o{ events : "generates (session_id)"
+    sessions ||--o| session_projection : "read model"
+    sessions ||--o{ snapshots : "snapshots by version"
+    events ||--o| dead_letter_events : "fails into"
+
+    sessions {
+        bigint id PK
+        varchar status
+        datetime created_at
+        datetime ended_at
+        bigint last_sequence
+        bigint version
+    }
+    participants {
+        bigint id PK
+        bigint session_id FK
+        varchar user_id
+        datetime joined_at
+        datetime left_at
+    }
+    events {
+        bigint session_id PK
+        bigint sequence PK
+        bigint id
+        varchar client_event_id
+        varchar user_id
+        varchar type
+        json payload
+        datetime client_timestamp
+        datetime server_received_at
+        varchar projection_status
+        int retry_count
+        datetime next_retry_at
+        varchar last_error
+    }
+    snapshots {
+        bigint session_id PK
+        int version PK
+        bigint last_event_id
+        bigint last_sequence
+        json state_json
+        datetime created_at
+    }
+    session_projection {
+        bigint session_id PK
+        int participant_count
+        bigint message_count
+        datetime last_message_at
+        bigint last_applied_event_id
+        datetime updated_at
+    }
+    dead_letter_events {
+        bigint id PK
+        bigint original_event_id
+        bigint session_id
+        varchar event_type
+        json payload
+        varchar error_message
+        text stack_trace
+        int retry_count
+        datetime moved_at
+    }
+```
+
 ## 2. 핵심 DDL
 
 ### 2.1 sessions
