@@ -2,12 +2,10 @@
 
 1:1 실시간 채팅 + 이벤트 기반 상태 복원 백엔드 (Spring Boot 3.3, Java 21)
 
-## 과제 개요
+## 개요
 
-Software Engineer(Backend) 사전 과제 — **실시간 통신(WebSocket) 구현**, **이벤트 소싱 기반 특정 시점 상태 복원(Determinism)**, **중복/순서 처리 전략**, **수평 확장 설계**, **DB 설계 및 쿼리 최적화**를 평가하는 과제입니다.
-
-**제출 기한:** 2026-04-28  
-**현황:** D2~D5 구현 완료 (D6~D7 진행 중)
+WebSocket 실시간 통신과 이벤트 소싱 기반의 특정 시점 상태 복원을 다루는 백엔드 프로젝트.
+중복/순서 처리, 수평 확장, DB 설계 및 쿼리 최적화 패턴을 함께 다룬다.
 
 ---
 
@@ -239,42 +237,18 @@ k6 스크립트로 다음 시나리오 실행:
 3. **Restore burst**: restore API 집중 호출 (30초)
 4. **Ramp-down**: 50VU → 0VU (10초)
 
+### 설계 임계치 (참고)
+
+- `http_req_duration{name:events} p(99) < 200ms`
+- `http_req_duration{name:restore} p(99) < 500ms`
+- `http_req_failed rate < 0.05`
+
 ### 실행 방법
 
-```bash
-k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d).json scripts/load-test.js
-```
-
-### 결과
-
-<!-- K6_RESULTS_START -->
-**실행 환경**: 2026-04-23, macOS, Docker Compose (MySQL + Redis + app1 + app2 + Prometheus + Grafana + Zipkin + exporter 2종)
-**부하 프로파일**: ramp-up 0→50 VU (30s) → sustained 50 VU (60s) → restore burst (30s) → ramp-down (10s)
-
-```
-running (1m15.0s), 50/50 VUs, 558 complete and 0 interrupted iterations
-default   [  58% ] 50/50 VUs  1m15.0s/2m10.0s
-```
-
-**부분 측정치 (ramp-up + sustained 초반 구간, 약 75초)**
-- 완료 iteration: 558건 (interrupted 0건)
-- Sustained 구간 달성 throughput: 약 10-15 iter/s (각 iteration이 세션 생성 1 + 이벤트 전송 10 + 간헐 timeline 조회 = ~12 HTTP req, 따라서 ~120-180 req/s)
-- 50 VU 포화 이후에도 iteration drop 없이 안정 동작 (0 interrupted)
-
-**한계 및 주석**
-- 본 실행은 테스트 도중 Docker 환경 종료로 인해 k6 summary 블록(최종 p50/p95/p99, threshold 결과) 산출 전에 중단되었습니다. 재현 시 전체 2m10s 완주하면 `docs/load-test-results/k6-<timestamp>.json`에 full summary가 저장됩니다.
-- 설계 임계치(참고값, 단일 노트북 환경 기준):
-  - `http_req_duration{name:events} p(99) < 200ms`
-  - `http_req_duration{name:restore} p(99) < 500ms`
-  - `http_req_failed rate < 0.05`
-- 관측: ramp-up 31초 시점에 50 VU 포화 도달, 이후 1분간 interrupted 0건 유지 — 앱 2대 + DB 아웃박스 파이프라인이 초기 스파이크를 흡수한 것으로 해석됩니다.
-
-**재현 절차**
 ```bash
 docker compose up -d --build
 k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json scripts/load-test.js || true
 ```
-<!-- K6_RESULTS_END -->
 
 ---
 
@@ -306,8 +280,6 @@ k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json sc
 ./gradlew test
 ```
 
-**현황:** 129개 테스트 모두 통과 (D2~D5 완료)
-
 ---
 
 ## 설계 문서
@@ -337,63 +309,39 @@ k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json sc
 3. **ADR-003**: JPA + QueryDSL로 append-only 특성 활용, Native는 SKIP LOCKED 1곳만
 4. **ADR-004**: DB 아웃박스로 이중 쓰기 문제 원천 차단, 트랜잭셔널 일관성 확보
 5. **ADR-005**: Redis 3용도(Pub/Sub, Presence, Recent N)로 한정, YAGNI 원칙 준수
-6. **ADR-006**: 메트릭 + 로그 + 추적 풀셋으로 과제 평가 3요소 전부 구현
-7. **ADR-007**: 단일 모듈 + 도메인 패키지로 1주일 ROI 최고
-8. **ADR-008**: 쿼리 파라미터 기반 최소 식별 (과제 Non-goals 준수)
+6. **ADR-006**: 메트릭 + 로그 + 추적 풀셋으로 관측 가능성 3요소 전부 구현
+7. **ADR-007**: 단일 모듈 + 도메인 패키지로 ROI 최적화
+8. **ADR-008**: 쿼리 파라미터 기반 최소 식별 (인증 체계는 범위 외)
 9. **ADR-009**: 단위 + 통합(Testcontainers) + k6 부하 테스트 조합
 
 ---
 
-## 구현 완료 항목
+## 설계 문서만 존재 (구현 범위 외)
 
-- [x] WebSocket 실시간 통신 (순수 핸들러)
-- [x] 세션 CRUD REST API
-- [x] 이벤트 수집 (WebSocket + HTTP fallback)
-- [x] Presence 관리 (Redis TTL)
-- [x] 중복 이벤트 필터링 (UNIQUE 제약)
-- [x] 순서 역전 정렬
-- [x] 특정 시점 상태 복원 API (`/timeline?at=...`)
-- [x] Snapshot + Replay 하이브리드
-- [x] 비동기 projection 파이프라인 (DB 아웃박스)
-- [x] DLQ + 지수 백오프 재시도
-- [x] Tombstone 패턴 (EDIT/DELETE 이벤트)
-- [x] ProjectionRebuild API (운영 용)
-- [x] 재연결 resume (lastSequence)
-- [x] Docker Compose 풀 스택 (앱 2대 + MySQL + Redis + 관측 도구)
-- [x] Prometheus + Grafana 대시보드 (3종)
-- [x] Logback JSON 로그 + MDC (traceId, spanId, sessionId 등)
-- [x] Micrometer Tracing + OpenTelemetry + Zipkin
-- [x] 단위/통합 테스트 129개 통과
-- [x] k6 부하 테스트 스크립트
+다음 항목들은 설계 문서에만 기재되어 있습니다:
 
----
-
-## 설계 문서만 (구현 Non-goals)
-
-다음 항목들은 과제 Non-goals에 따라 설계 문서에만 기재되어 있습니다:
-
-- [ ] JWT/OAuth2 인증 체계 (쿼리 파라미터 기반으로 대체)
-- [ ] Kafka 기반 이벤트 스트리밍 파이프라인 (DB 아웃박스로 대체)
-- [ ] GDPR / 탈퇴 사용자 데이터 삭제 대응 (crypto-shredding 설계는 docs/05 기재)
-- [ ] Hot/Warm/Cold 스토리지 티어링 (설계는 docs/06 기재)
-- [ ] Rate Limiting / Backpressure (설계는 docs/06 기재)
-- [ ] 자동 페일오버 (장애 시나리오는 docs/08 기재)
-- [ ] WebRTC 영상 통화
+- JWT/OAuth2 인증 체계 (쿼리 파라미터 기반으로 대체)
+- Kafka 기반 이벤트 스트리밍 파이프라인 (DB 아웃박스로 대체)
+- GDPR / 탈퇴 사용자 데이터 삭제 대응 (crypto-shredding 설계는 docs/05)
+- Hot/Warm/Cold 스토리지 티어링 (설계는 docs/06)
+- Rate Limiting / Backpressure (설계는 docs/06)
+- 자동 페일오버 (장애 시나리오는 docs/08)
+- WebRTC 영상 통화
 
 ---
 
 ## 제약 및 알려진 한계
 
-- **인증**: 쿼리 파라미터 기반 최소 식별 (과제 Non-goals 준수)
+- **인증**: 쿼리 파라미터 기반 최소 식별 (범위 외)
 - **1:N 채팅**: 범위 외 (1:1 채팅 전용)
 - **파일 첨부**: 범위 외
-- **부하 테스트 환경**: 단일 노트북 기준이므로 p99 threshold는 참고치일 수 있음
+- **부하 테스트 환경**: 단일 노트북 기준이므로 p99 threshold는 참고치
 
 ---
 
 ## 개발 방법론 — AI 페어 프로그래밍
 
-본 과제는 **Claude Code 위에 4역할 가상 엔지니어링 팀**을 구성하여 진행 중입니다:
+본 프로젝트는 **Claude Code 위에 4역할 가상 엔지니어링 팀**을 구성하여 진행되었다.
 
 | 역할 | 책임 | 권한 |
 |---|---|---|
@@ -402,22 +350,15 @@ k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json sc
 | Critic | 결함 지적 (BLOCKER/MAJOR/MINOR) | read-only |
 | Executor | Phase 단위 실제 구현 | write + Bash |
 
-매 Day마다 `Planner v1 → Architect → Planner v2 → Critic → Planner v3 → Executor` 합의 사이클을 강제하여 결함을 코드 진입 전에 차단합니다.
+`Planner v1 → Architect → Planner v2 → Critic → Planner v3 → Executor` 합의 사이클을 강제하여 결함을 코드 진입 전에 차단한다.
 
-**누적 현황 (D2-D5):**
-- 27 commits
-- 94 파일
-- +6,719 라인
-- 100+ 테스트 통과
-- 5회 합의 사이클
-
-> 상세 도구 스택, 결함 차단 사례는 [docs/12-ai-harness-engineering.md](docs/12-ai-harness-engineering.md) 참조.
+상세 도구 스택, 결함 차단 사례는 [docs/12-ai-harness-engineering.md](docs/12-ai-harness-engineering.md) 참조.
 
 ---
 
 ## 보안 주의
 
-본 저장소는 **로컬 실행 편의**를 위해 비밀번호/설정을 평문 포함하고 있습니다:
+본 저장소는 **로컬 실행 편의**를 위해 비밀번호/설정을 평문 포함하고 있다.
 
 - `docker-compose.yml`: MySQL root/root, Redis 비번 없음
 - `application-docker.yml`: DB/Redis 접속 정보
@@ -425,19 +366,5 @@ k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json sc
 **운영 환경에서는 반드시:**
 - AWS Secrets Manager, Azure Key Vault 등 사용
 - 환경 변수 주입 (`-e DB_PASSWORD=...`)
-- 이 저장소는 제출 전 .gitignore 업데이트 필요
 
----
-
-## 라이선스 및 제출
-
-- **프로젝트**: Software Engineer(Backend) 사전 과제 응시 작업
-- **제출 기한**: 2026-04-28
-- **현황**: D2~D5 구현 완료, D6~D7 진행 중
-
----
-
-## 연락처 및 기타
-
-- 질문/피드백: [과제 담당자 정보 기재]
-- 로컬 실행 중 문제: `docker compose logs -f app1` 으로 로그 확인
+로컬 실행 중 문제는 `docker compose logs -f app1` 으로 로그 확인.
