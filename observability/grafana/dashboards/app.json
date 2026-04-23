@@ -1,0 +1,149 @@
+{
+  "title": "Chat EventStore — App Dashboard",
+  "uid": "chat-app",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "tags": ["chat", "eventstore"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Events received rate",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(chat_events_received_total[1m])) by (type)",
+          "legendFormat": "{{type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Duplicates rate",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(chat_events_duplicates_total[1m]))",
+          "legendFormat": "duplicates",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Outbox pending size",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(chat_outbox_pending_size)",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Outbox lag (seconds)",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "chat_outbox_lag_seconds",
+          "legendFormat": "{{exported_instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "WebSocket active sessions",
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(chat_websocket_sessions_active)",
+          "legendFormat": "active",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "DLQ count",
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(chat_projection_dead_letter_total)",
+          "legendFormat": "dlq",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {}
+    }
+  ]
+}
