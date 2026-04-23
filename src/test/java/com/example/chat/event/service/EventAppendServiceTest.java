@@ -6,6 +6,7 @@ import com.example.chat.event.domain.Event;
 import com.example.chat.event.domain.EventType;
 import com.example.chat.event.dto.AppendEventRequest;
 import com.example.chat.event.dto.AppendResult;
+import com.example.chat.common.metrics.ChatMetrics;
 import com.example.chat.event.repository.EventRepository;
 import com.example.chat.session.repository.SessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +52,9 @@ class EventAppendServiceTest {
     @Mock
     private EntityManager entityManager;
 
+    @Mock
+    private ChatMetrics chatMetrics;
+
     private EventAppendService service;
 
     @BeforeEach
@@ -58,7 +62,7 @@ class EventAppendServiceTest {
         // Let TransactionTemplate execute its callback inline — no real JDBC txn required for mocked repositories.
         when(transactionManager.getTransaction(any()))
                 .thenReturn(new SimpleTransactionStatus());
-        service = new EventAppendService(eventRepository, sessionRepository, new ObjectMapper(), transactionManager);
+        service = new EventAppendService(eventRepository, sessionRepository, new ObjectMapper(), transactionManager, chatMetrics);
         // Inject the @PersistenceContext mock via reflection since Mockito cannot see the field annotation.
         setField(service, "entityManager", entityManager);
     }

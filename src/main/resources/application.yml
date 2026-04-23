@@ -25,7 +25,10 @@ spring:
     locations: classpath:db/migration
   threads:
     virtual:
-      enabled: true
+      # Temporarily disabled: Spring Boot 3.3 + Micrometer Tracing OTel bridge loses
+      # HTTP server span context under virtual threads (metric is recorded but span
+      # not exported to Zipkin). Revisit when upgrading to 3.4+.
+      enabled: false
   data:
     redis:
       host: localhost

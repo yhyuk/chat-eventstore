@@ -6,6 +6,7 @@ import com.example.chat.event.domain.ProjectionStatus;
 import com.example.chat.event.repository.EventIdProjection;
 import com.example.chat.event.repository.EventRepository;
 import com.example.chat.projection.domain.DeadLetterEvent;
+import com.example.chat.common.metrics.ChatMetrics;
 import com.example.chat.projection.repository.DeadLetterEventRepository;
 import com.example.chat.projection.service.ProjectionService;
 import com.example.chat.projection.service.SnapshotService;
@@ -41,6 +42,7 @@ class OutboxPollerTest {
     @Mock private ProjectionService projectionService;
     @Mock private SnapshotService snapshotService;
     @Mock private PlatformTransactionManager txManager;
+    @Mock private ChatMetrics chatMetrics;
 
     private OutboxPoller poller;
 
@@ -48,7 +50,7 @@ class OutboxPollerTest {
     void setUp() {
         when(txManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         poller = new OutboxPoller(eventRepository, dlqRepository, projectionService,
-                snapshotService, txManager, 100, 5, true);
+                snapshotService, txManager, chatMetrics, 100, 5, true);
     }
 
     @Test

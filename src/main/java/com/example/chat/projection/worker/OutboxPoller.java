@@ -1,5 +1,6 @@
 package com.example.chat.projection.worker;
 
+import com.example.chat.common.metrics.ChatMetrics;
 import com.example.chat.event.domain.Event;
 import com.example.chat.event.domain.ProjectionStatus;
 import com.example.chat.event.repository.EventIdProjection;
@@ -8,7 +9,9 @@ import com.example.chat.projection.domain.DeadLetterEvent;
 import com.example.chat.projection.repository.DeadLetterEventRepository;
 import com.example.chat.projection.service.ProjectionService;
 import com.example.chat.projection.service.SnapshotService;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,7 +21,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -30,6 +35,7 @@ public class OutboxPoller {
     private final SnapshotService snapshotService;
     private final TransactionTemplate batchReadTemplate;
     private final TransactionTemplate eventProcessTemplate;
+    private final ChatMetrics chatMetrics;
     private final int batchSize;
     private final int maxRetry;
     private final boolean schedulingEnabled;
@@ -39,6 +45,7 @@ public class OutboxPoller {
                         ProjectionService projectionService,
                         SnapshotService snapshotService,
                         PlatformTransactionManager transactionManager,
+                        ChatMetrics chatMetrics,
                         @Value("${app.outbox.batch-size:100}") int batchSize,
                         @Value("${app.outbox.max-retry:5}") int maxRetry,
                         @Value("${app.outbox.enabled:true}") boolean schedulingEnabled) {
@@ -48,9 +55,24 @@ public class OutboxPoller {
         this.snapshotService = snapshotService;
         this.batchReadTemplate = new TransactionTemplate(transactionManager);
         this.eventProcessTemplate = new TransactionTemplate(transactionManager);
+        this.chatMetrics = chatMetrics;
         this.batchSize = batchSize;
         this.maxRetry = maxRetry;
         this.schedulingEnabled = schedulingEnabled;
+    }
+
+    @PostConstruct
+    public void registerGauges() {
+        chatMetrics.registerPendingGauge(() -> eventRepository.countByProjectionStatus(ProjectionStatus.PENDING));
+        chatMetrics.registerLagGauge(() -> {
+            LocalDateTime oldest = eventRepository.findOldestPendingServerReceivedAt().orElse(null);
+            if (oldest == null) {
+                return 0.0;
+            }
+            long nowEpoch = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
+            long oldestEpoch = oldest.toEpochSecond(ZoneOffset.UTC);
+            return Math.max(0.0, (double) (nowEpoch - oldestEpoch));
+        });
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:500}")
@@ -62,6 +84,7 @@ public class OutboxPoller {
     }
 
     public void drain() {
+        MDC.put("batchId", UUID.randomUUID().toString());
         try {
             // Step 1: batch ID fetch in its own transaction so the SKIP LOCKED row locks are
             // released immediately. Re-fetch + per-event idempotent processing is safe because
@@ -80,6 +103,8 @@ public class OutboxPoller {
             // @Scheduled swallows exceptions silently; catch here so DB outages are visible
             // in logs but do not kill the scheduler thread.
             log.warn("Outbox polling failed, will retry next cycle", ex);
+        } finally {
+            MDC.remove("batchId");
         }
     }
 
@@ -163,6 +188,7 @@ public class OutboxPoller {
                 .retryCount(event.getRetryCount() + 1)
                 .build();
         deadLetterEventRepository.save(dlq);
+        chatMetrics.incDeadLetter(ex.getClass().getSimpleName());
         log.error("Moved to DLQ: sessionId={}, sequence={}, retries={}, error={}",
                 event.getSessionId(), event.getSequence(), event.getRetryCount() + 1, ex.getMessage());
     }

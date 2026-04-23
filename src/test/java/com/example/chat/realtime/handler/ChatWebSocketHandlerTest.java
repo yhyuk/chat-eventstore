@@ -14,6 +14,7 @@ import com.example.chat.realtime.pubsub.RedisMessagePublisher;
 import com.example.chat.realtime.registry.SessionRegistry;
 import com.example.chat.realtime.service.RecentCacheService;
 import com.example.chat.realtime.service.ResumeService;
+import com.example.chat.common.metrics.ChatMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,7 @@ class ChatWebSocketHandlerTest {
     @Mock private RecentCacheService recentCacheService;
     @Mock private RedisMessagePublisher publisher;
     @Mock private ResumeService resumeService;
+    @Mock private ChatMetrics chatMetrics;
     @Mock private WebSocketSession ws;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -60,7 +62,7 @@ class ChatWebSocketHandlerTest {
     void setUp() {
         objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
         handler = new ChatWebSocketHandler(objectMapper, eventAppendService, sessionRegistry,
-                presenceService, recentCacheService, publisher, resumeService);
+                presenceService, recentCacheService, publisher, resumeService, chatMetrics);
         attrs = new HashMap<>();
         attrs.put(ChatHandshakeInterceptor.ATTR_SESSION_ID, 42L);
         attrs.put(ChatHandshakeInterceptor.ATTR_USER_ID, "alice");

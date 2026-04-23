@@ -31,4 +31,8 @@ public class SessionRegistry {
         CopyOnWriteArraySet<WebSocketSession> sessions = sessionMap.get(sessionId);
         return sessions == null ? Collections.emptySet() : sessions;
     }
+
+    public int sessionCount() {
+        return sessionMap.values().stream().mapToInt(Set::size).sum();
+    }
 }

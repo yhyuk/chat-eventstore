@@ -3,6 +3,7 @@ package com.example.chat.realtime.handler;
 import com.example.chat.common.exception.DuplicateEventException;
 import com.example.chat.common.exception.ErrorCode;
 import com.example.chat.common.exception.InvalidSequenceException;
+import com.example.chat.common.metrics.ChatMetrics;
 import com.example.chat.event.domain.Event;
 import com.example.chat.event.domain.EventType;
 import com.example.chat.event.dto.AppendEventRequest;
@@ -20,6 +21,7 @@ import com.example.chat.realtime.registry.SessionRegistry;
 import com.example.chat.realtime.service.RecentCacheService;
 import com.example.chat.realtime.service.ResumeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -44,6 +46,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final RecentCacheService recentCacheService;
     private final RedisMessagePublisher publisher;
     private final ResumeService resumeService;
+    private final ChatMetrics chatMetrics;
+
+    @PostConstruct
+    public void registerGauges() {
+        chatMetrics.registerWsSessionsGauge(sessionRegistry::sessionCount);
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession webSocketSession) throws Exception {

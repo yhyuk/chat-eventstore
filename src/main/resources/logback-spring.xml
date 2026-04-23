@@ -19,6 +19,7 @@
             <includeMdcKeyName>sessionId</includeMdcKeyName>
             <includeMdcKeyName>eventId</includeMdcKeyName>
             <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>batchId</includeMdcKeyName>
         </encoder>
     </appender>
 
@@ -35,4 +36,12 @@
     </springProfile>
 
     <logger name="com.example.chat" level="DEBUG"/>
+
+    <!--
+      Hibernate logs PK/UK violations at ERROR before our service layer catches them.
+      We translate these into DuplicateEventException/InvalidSequenceException and log
+      the business outcome at WARN in EventAppendService, so the raw SQL exception is
+      redundant noise. Suppress to keep ERROR strictly for real server defects.
+    -->
+    <logger name="org.hibernate.engine.jdbc.spi.SqlExceptionHelper" level="OFF"/>
 </configuration>

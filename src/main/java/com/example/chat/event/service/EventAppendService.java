@@ -2,6 +2,7 @@ package com.example.chat.event.service;
 
 import com.example.chat.common.exception.DuplicateEventException;
 import com.example.chat.common.exception.InvalidSequenceException;
+import com.example.chat.common.metrics.ChatMetrics;
 import com.example.chat.event.domain.Event;
 import com.example.chat.event.dto.AppendEventRequest;
 import com.example.chat.event.dto.AppendResult;
@@ -31,6 +32,7 @@ public class EventAppendService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate writeTemplate;
     private final TransactionTemplate readOnlyTemplate;
+    private final ChatMetrics chatMetrics;
 
     // Injected via @PersistenceContext so the EntityManager is tx-scoped and shares the
     // writeTemplate's transaction. Using em.persist(...) explicitly forces INSERT semantics.
@@ -45,13 +47,15 @@ public class EventAppendService {
             EventRepository eventRepository,
             SessionRepository sessionRepository,
             ObjectMapper objectMapper,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ChatMetrics chatMetrics) {
         this.eventRepository = eventRepository;
         this.sessionRepository = sessionRepository;
         this.objectMapper = objectMapper;
         this.writeTemplate = new TransactionTemplate(transactionManager);
         this.readOnlyTemplate = new TransactionTemplate(transactionManager);
         this.readOnlyTemplate.setReadOnly(true);
+        this.chatMetrics = chatMetrics;
     }
 
     public AppendResult append(Long sessionId, AppendEventRequest request) {
@@ -84,7 +88,12 @@ public class EventAppendService {
                 sessionRepository.updateLastSequence(sessionId, request.sequence());
                 return event;
             });
+            chatMetrics.incEventsReceived(request.type(), "ACCEPTED");
             return AppendResult.accepted(saved);
+        } catch (DuplicateEventException dup) {
+            chatMetrics.incEventsReceived(request.type(), "DUPLICATE_IGNORED");
+            chatMetrics.incDuplicates();
+            throw dup;
         } catch (DataIntegrityViolationException ex) {
             return resolveConflict(sessionId, request, ex);
         } catch (PersistenceException ex) {
@@ -108,6 +117,10 @@ public class EventAppendService {
             if (bySeq.isPresent()) {
                 Event existing = bySeq.get();
                 if (existing.getClientEventId().equals(request.clientEventId())) {
+                    // Called from within catch(DataIntegrityViolationException); the outer
+                    // catch(DuplicateEventException) is NOT re-entered, so bump metrics here.
+                    chatMetrics.incEventsReceived(request.type(), "DUPLICATE_IGNORED");
+                    chatMetrics.incDuplicates();
                     throw new DuplicateEventException(existing.getId(), existing.getSequence());
                 }
                 // Different clientEventId at same sequence -> real conflict.
@@ -118,6 +131,8 @@ public class EventAppendService {
                     sessionId, request.clientEventId());
             if (byClientId.isPresent()) {
                 Event existing = byClientId.get();
+                chatMetrics.incEventsReceived(request.type(), "DUPLICATE_IGNORED");
+                chatMetrics.incDuplicates();
                 throw new DuplicateEventException(existing.getId(), existing.getSequence());
             }
             // Step 3: neither key conflicts — constraint other than (PK, UK) fired. Rethrow original.
