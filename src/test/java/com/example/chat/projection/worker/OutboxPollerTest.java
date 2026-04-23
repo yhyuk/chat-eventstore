@@ -73,7 +73,7 @@ class OutboxPollerTest {
 
         verify(projectionService).apply(event);
         verify(eventRepository).updateProjectionStatus(
-                1L, 1L, ProjectionStatus.DONE.name(), 0, event.getNextRetryAt(), null);
+                1L, 1L, ProjectionStatus.DONE, 0, event.getNextRetryAt(), null);
         verify(snapshotService).createSnapshotIfNeeded(event);
     }
 
@@ -112,10 +112,10 @@ class OutboxPollerTest {
         poller.drain();
 
         ArgumentCaptor<Integer> retryCount = ArgumentCaptor.forClass(Integer.class);
-        ArgumentCaptor<String> statusCap = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<ProjectionStatus> statusCap = ArgumentCaptor.forClass(ProjectionStatus.class);
         verify(eventRepository).updateProjectionStatus(
                 any(), any(), statusCap.capture(), retryCount.capture(), any(), any());
-        assertThat(statusCap.getValue()).isEqualTo(ProjectionStatus.PENDING.name());
+        assertThat(statusCap.getValue()).isEqualTo(ProjectionStatus.PENDING);
         assertThat(retryCount.getValue()).isEqualTo(1);
         verify(dlqRepository, never()).save(any());
     }
@@ -138,7 +138,7 @@ class OutboxPollerTest {
         assertThat(dlq.getOriginalEventId()).isEqualTo(10L);
         assertThat(dlq.getRetryCount()).isEqualTo(5);
         verify(eventRepository).updateProjectionStatus(
-                any(), any(), org.mockito.ArgumentMatchers.eq(ProjectionStatus.FAILED.name()),
+                any(), any(), org.mockito.ArgumentMatchers.eq(ProjectionStatus.FAILED),
                 any(), any(), any());
     }
 

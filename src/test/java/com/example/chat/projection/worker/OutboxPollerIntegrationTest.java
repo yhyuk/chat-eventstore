@@ -111,10 +111,10 @@ class OutboxPollerIntegrationTest extends AbstractFullIntegrationTest {
     @Test
     void drain_does_not_pick_up_failed_events() {
         appendMessage(1L, "c1");
-        // Mark it as FAILED directly; it should be ignored by subsequent drains until DLQ retry.
+        // FAILED 상태로 직접 마킹: 이후 drain에서 DLQ 재시도 전까지 무시되어야 한다.
         tx.executeWithoutResult(status ->
                 eventRepository.updateProjectionStatus(
-                        sessionId, 1L, ProjectionStatus.FAILED.name(), 5, LocalDateTime.now(), "manual"));
+                        sessionId, 1L, ProjectionStatus.FAILED, 5, LocalDateTime.now(), "manual"));
 
         poller.drain();
 
