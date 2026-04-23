@@ -90,6 +90,25 @@ chat-eventstore/
 | 08 | 장애 시나리오 | [docs/08-failure-scenarios.md](docs/08-failure-scenarios.md) |
 | 09 | 테스트 및 부하 전략 | [docs/09-testing-and-load.md](docs/09-testing-and-load.md) |
 | 10 | 쿼리 최적화 | [docs/10-query-optimization.md](docs/10-query-optimization.md) |
+| 12 | AI 하네스 엔지니어링 (개발 방법론) | [docs/12-ai-harness-engineering.md](docs/12-ai-harness-engineering.md) |
+
+## 개발 방법론 — AI 페어 프로그래밍
+
+본 과제는 1인 개발 환경에서 Claude Code 위에 **4역할 가상 엔지니어링 팀**을 구성하여 진행 중이다 (현재 진행률 약 80%).
+
+| 역할 | 인스턴스 | 책임 | 권한 |
+|---|---:|---|---|
+| Planner | 11 | 요구사항 분해, 옵션 비교, ADR 초안 | 읽기 + plan |
+| Architect | 11 | 설계 검증, 위험 식별, steelman | read-only |
+| Critic | 8 | BLOCKER/MAJOR/MINOR 결함 지적 | read-only |
+| Executor | 4 | Phase 단위 실제 구현 | 쓰기 + Bash |
+
+매 Day마다 `Planner v1 → Architect → Planner v2 → Critic → Planner v3 → Executor` 합의 사이클을 강제하여 결함을 코드 진입 전에 차단했다 (D4에서만 BLOCKER 2건 + MAJOR 5건 사전 발견·반영).
+
+**현 시점 누적 (D2-1 ~ D5 합의 완료):** 27 commits / 94 파일 / +6,719 라인 / 100 테스트 PASS / Flyway V1~V6 / 합의 사이클 5회.
+
+> 도구 스택, 합의 사이클 상세, Phase 병렬화 전략, 결함 차단 사례는 [docs/12-ai-harness-engineering.md](docs/12-ai-harness-engineering.md) 참조.
+> 본 문서는 D7 완료 후 최종 수치로 갱신될 예정이다.
 
 ## 보안 주의
 

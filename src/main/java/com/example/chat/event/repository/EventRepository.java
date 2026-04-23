@@ -19,6 +19,17 @@ public interface EventRepository extends JpaRepository<Event, EventId> {
 
     List<Event> findBySessionIdAndSequenceGreaterThanOrderBySequenceAsc(Long sessionId, Long sequence);
 
+    // D5 restore: bounded replay (snapshot.lastSequence < sequence AND server_received_at <= at).
+    List<Event> findBySessionIdAndSequenceGreaterThanAndServerReceivedAtLessThanEqualOrderBySequenceAsc(
+            Long sessionId, Long sequenceExclusive, LocalDateTime at);
+
+    // D5 restore: MAX(sequence) at a given point in time. Derived queries do not support aggregate MAX,
+    // so an explicit JPQL is used. Result is Optional<Long> because the session may have no events <= at.
+    @Query("SELECT MAX(e.sequence) FROM Event e "
+            + "WHERE e.sessionId = :sessionId AND e.serverReceivedAt <= :at")
+    Optional<Long> findMaxSequenceBySessionIdAndServerReceivedAtLessThanEqual(
+            @Param("sessionId") Long sessionId, @Param("at") LocalDateTime at);
+
     // Batch read for outbox polling. Returns only IDs (interface projection) so the persistence
     // context does not get polluted with entities that carry null @DynamicInsert columns.
     // PENDING only: FAILED events are already in DLQ and only re-enter via the retry API.

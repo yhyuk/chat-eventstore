@@ -9,7 +9,11 @@ import com.example.chat.event.repository.EventRepository;
 import com.example.chat.session.repository.SessionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.PersistenceException;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -27,6 +31,15 @@ public class EventAppendService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate writeTemplate;
     private final TransactionTemplate readOnlyTemplate;
+
+    // Injected via @PersistenceContext so the EntityManager is tx-scoped and shares the
+    // writeTemplate's transaction. Using em.persist(...) explicitly forces INSERT semantics.
+    // Without this, JpaRepository.saveAndFlush() on an entity whose @IdClass fields are
+    // pre-populated (as Event is) goes through em.merge(...) and can silently UPDATE an
+    // existing row -- bypassing the UK(session_id, client_event_id) constraint that the
+    // append path relies on for duplicate detection.
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public EventAppendService(
             EventRepository eventRepository,
@@ -64,13 +77,26 @@ public class EventAppendService {
                         .build();
                 // @DynamicInsert omits null fields (projectionStatus, retryCount, nextRetryAt,
                 // lastError, id, serverReceivedAt) so DB DEFAULT and @Generated(INSERT) apply.
-                Event persisted = eventRepository.saveAndFlush(event);
+                // persist() forces INSERT semantics (unlike save()/saveAndFlush() which use merge
+                // when @IdClass fields are pre-set and may silently UPDATE, masking UK violations).
+                entityManager.persist(event);
+                entityManager.flush();
                 sessionRepository.updateLastSequence(sessionId, request.sequence());
-                return persisted;
+                return event;
             });
             return AppendResult.accepted(saved);
         } catch (DataIntegrityViolationException ex) {
             return resolveConflict(sessionId, request, ex);
+        } catch (PersistenceException ex) {
+            // em.persist()+em.flush() is not wrapped by Spring Data proxies, so raw
+            // Hibernate ConstraintViolationException is thrown. Translate to the same
+            // conflict resolution path.
+            if (ex.getCause() instanceof ConstraintViolationException
+                    || ex instanceof ConstraintViolationException) {
+                return resolveConflict(sessionId, request,
+                        new DataIntegrityViolationException("Persist failed", ex));
+            }
+            throw ex;
         }
     }
 

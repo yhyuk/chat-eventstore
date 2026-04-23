@@ -1,13 +1,19 @@
 package com.example.chat.common;
 
+import com.example.chat.common.config.QueryDslConfig;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 // Reusable MySQL container for @DataJpaTest -- Flyway seeds schema, Hibernate validates.
+// QueryDslConfig is imported so SessionRepository's SessionQueryRepository fragment can resolve
+// its JPAQueryFactory dependency (otherwise context load fails for any repo that now composes
+// the query fragment).
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(QueryDslConfig.class)
 public abstract class AbstractIntegrationTest {
 
     @DynamicPropertySource

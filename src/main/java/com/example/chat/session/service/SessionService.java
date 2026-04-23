@@ -5,9 +5,11 @@ import com.example.chat.common.exception.SessionNotFoundException;
 import com.example.chat.projection.service.SnapshotService;
 import com.example.chat.session.domain.Participant;
 import com.example.chat.session.domain.Session;
+import com.example.chat.session.domain.SessionStatus;
 import com.example.chat.session.dto.CreateSessionResponse;
 import com.example.chat.session.dto.EndSessionResponse;
 import com.example.chat.session.dto.JoinSessionResponse;
+import com.example.chat.session.dto.SessionListResponse;
 import com.example.chat.session.repository.ParticipantRepository;
 import com.example.chat.session.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -81,5 +83,15 @@ public class SessionService {
             log.warn("Final snapshot creation failed for session {}: {}", sessionId, ex.getMessage());
         }
         return EndSessionResponse.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public SessionListResponse listSessions(SessionStatus status,
+                                             LocalDateTime from,
+                                             LocalDateTime to,
+                                             String participant,
+                                             int page,
+                                             int size) {
+        return sessionRepository.search(status, from, to, participant, page, size);
     }
 }

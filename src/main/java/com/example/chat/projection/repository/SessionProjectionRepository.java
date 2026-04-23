@@ -35,4 +35,13 @@ public interface SessionProjectionRepository extends JpaRepository<SessionProjec
                          @Param("messageCount") Long messageCount,
                          @Param("lastMessageAt") LocalDateTime lastMessageAt,
                          @Param("lastAppliedEventId") Long lastAppliedEventId);
+
+    // D5 rebuild: wipe projection row so the subsequent upsert inserts a fresh INSERT path
+    // without tripping the last_applied_event_id monotonicity guard.
+    @Modifying(clearAutomatically = true)
+    @Query(
+            value = "DELETE FROM session_projection WHERE session_id = :sessionId",
+            nativeQuery = true
+    )
+    int deleteByIdNative(@Param("sessionId") Long sessionId);
 }
