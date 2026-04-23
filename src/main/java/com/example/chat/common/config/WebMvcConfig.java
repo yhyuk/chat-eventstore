@@ -23,9 +23,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Bean
     public FilterRegistrationBean<MdcFilter> mdcFilterRegistration() {
-        // Run AFTER Spring Boot's ServerHttpObservationFilter (HIGHEST_PRECEDENCE + 1) so
-        // the Micrometer Observation scope is already open when we populate MDC. Otherwise
-        // HTTP requests would not produce Zipkin spans.
+        // Spring Boot의 ServerHttpObservationFilter(HIGHEST_PRECEDENCE + 1) 이후에 실행되어야
+        // Micrometer Observation 스코프가 열린 상태에서 MDC를 채울 수 있다.
+        // 순서가 역전되면 HTTP 요청이 Zipkin 스팬을 생성하지 못한다.
         FilterRegistrationBean<MdcFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new MdcFilter());
         registration.addUrlPatterns("/*");

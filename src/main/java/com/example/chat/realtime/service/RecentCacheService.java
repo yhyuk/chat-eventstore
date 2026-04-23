@@ -39,7 +39,7 @@ public class RecentCacheService {
             String key = keyOf(sessionId);
             ZSetOperations<String, String> ops = redisTemplate.opsForZSet();
             ops.add(key, json, sequence.doubleValue());
-            // Keep only the newest N entries — trim removes oldest by rank (0 = oldest, -1 = newest).
+            // 최신 N개만 유지 — rank 0이 가장 오래된 항목이므로 앞에서부터 제거.
             ops.removeRange(key, 0, -(cacheSize + 1L));
         } catch (JsonProcessingException e) {
             log.warn("Recent cache serialize failed: sessionId={}", sessionId, e);

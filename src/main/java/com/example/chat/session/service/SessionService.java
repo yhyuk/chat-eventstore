@@ -75,8 +75,7 @@ public class SessionService {
         Session saved = sessionRepository.saveAndFlush(session);
         log.info("Session ended: id={}", sessionId);
 
-        // Final snapshot runs in REQUIRES_NEW so a snapshot failure cannot roll back the
-        // authoritative end() commit that was just flushed. Failures are logged and discarded.
+        // 최종 스냅샷은 REQUIRES_NEW 트랜잭션으로 실행해 스냅샷 실패가 이미 커밋된 end()를 롤백하지 않도록 한다.
         try {
             snapshotService.createFinalSnapshot(sessionId);
         } catch (Exception ex) {

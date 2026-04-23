@@ -33,7 +33,6 @@ public class SessionController {
         return sessionService.createSession();
     }
 
-    // D5 session list API. QueryDSL-backed dynamic filter -- see SessionQueryRepositoryImpl.
     @GetMapping
     public SessionListResponse listSessions(
             @RequestParam(required = false) SessionStatus status,

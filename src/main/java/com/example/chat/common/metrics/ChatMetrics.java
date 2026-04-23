@@ -23,8 +23,8 @@ public class ChatMetrics {
 
     private final MeterRegistry meterRegistry;
 
-    // Micrometer stores the gauge source via WeakReference; lambda suppliers have no
-    // strong ref and get GC'd, causing NaN. Keep them alive via this list.
+    // Micrometer는 게이지 소스를 WeakReference로 보관한다. 람다 supplier에 강한 참조가 없으면
+    // GC 수집 후 NaN이 되므로, 이 리스트로 강한 참조를 유지한다.
     private final List<Supplier<Number>> gaugeSuppliers = new ArrayList<>();
 
     public void incEventsReceived(Object type, String result) {

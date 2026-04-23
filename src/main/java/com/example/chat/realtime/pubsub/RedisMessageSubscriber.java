@@ -32,7 +32,7 @@ public class RedisMessageSubscriber implements MessageListener {
             }
             String body = new String(message.getBody(), StandardCharsets.UTF_8);
             EventBroadcastFrame frame = objectMapper.readValue(body, EventBroadcastFrame.class);
-            // Wrap in the same envelope shape ChatWebSocketHandler uses for ACK/ERROR:
+            // ChatWebSocketHandler가 ACK/ERROR에 사용하는 봉투 형태로 감쌈:
             //   { "frameType": "EVENT", "body": { "event": {...} } }
             String outbound = objectMapper.writeValueAsString(new FrameEnvelope(frame.frameType(), frame));
             TextMessage textMessage = new TextMessage(outbound);
@@ -48,6 +48,7 @@ public class RedisMessageSubscriber implements MessageListener {
         if (!ws.isOpen()) {
             return;
         }
+        // WebSocketSession은 thread-safe하지 않아 동시 sendMessage 호출 시 프레임이 섞일 수 있음.
         synchronized (ws) {
             try {
                 if (ws.isOpen()) {

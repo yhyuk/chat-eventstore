@@ -36,8 +36,8 @@ public class Snapshot {
     @Column(name = "state_json", columnDefinition = "json", nullable = false)
     private String stateJson;
 
-    // Application-level timestamp: @Immutable + @Generated causes Hibernate 6.5 lock-mode error,
-    // so we assign createdAt in @PrePersist instead of relying on DB DEFAULT read-back.
+    // @Immutable + @Generated 조합이 Hibernate 6.5에서 lock-mode 오류를 발생시키므로,
+    // DB DEFAULT 읽기 대신 @PrePersist에서 직접 할당한다.
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 

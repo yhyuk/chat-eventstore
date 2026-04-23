@@ -30,7 +30,7 @@ public class PresenceService {
     public void goOnline(Long sessionId, String userId) {
         String key = keyOf(sessionId);
         try {
-            // Pipeline SADD + EXPIRE atomically from the client's perspective: single round-trip, both commands queued.
+            // SADD + EXPIRE를 파이프라인으로 묶어 단일 왕복으로 처리 (클라이언트 관점에서 원자적).
             redisTemplate.executePipelined((RedisConnection connection) -> {
                 connection.sAdd(key.getBytes(StandardCharsets.UTF_8), userId.getBytes(StandardCharsets.UTF_8));
                 connection.expire(key.getBytes(StandardCharsets.UTF_8), ttlSeconds);
@@ -42,8 +42,8 @@ public class PresenceService {
     }
 
     public void refreshTtl(Long sessionId, String userId) {
-        // Called per inbound message to keep an active user from timing out.
-        // userId is accepted for API symmetry; EXPIRE applies to the whole session key.
+        // 인바운드 메시지마다 호출해 활성 사용자의 TTL을 갱신.
+        // userId는 API 대칭성을 위해 받지만, EXPIRE는 세션 키 전체에 적용됨.
         String key = keyOf(sessionId);
         try {
             redisTemplate.expire(key, java.time.Duration.ofSeconds(ttlSeconds));

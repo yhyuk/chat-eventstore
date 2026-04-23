@@ -10,6 +10,6 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 
     Optional<Participant> findBySessionAndUserId(Session session, String userId);
 
-    // Lightweight existence check used by HandshakeInterceptor without loading the Session entity.
+    // HandshakeInterceptor에서 Session 엔티티를 로드하지 않고 참여 여부만 확인하는 경량 조회.
     boolean existsBySessionIdAndUserId(Long sessionId, String userId);
 }

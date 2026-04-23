@@ -3,7 +3,7 @@ package com.example.chat.projection.domain;
 import java.io.Serializable;
 import java.util.Objects;
 
-// Excluded from Lombok due to QueryDSL APT ordering conflicts
+// QueryDSL APT 처리 순서 충돌로 인해 Lombok 미적용.
 public class SnapshotId implements Serializable {
 
     private Long sessionId;

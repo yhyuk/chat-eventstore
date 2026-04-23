@@ -15,9 +15,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * MDC filter that injects requestId, sessionId, and userId into the MDC context
- * for each HTTP request. Uses targeted remove (not MDC.clear()) to preserve
- * Micrometer traceId/spanId propagated via separate mechanisms.
+ * 각 HTTP 요청에 requestId, sessionId, userId를 MDC에 주입한다.
+ * Micrometer가 별도 메커니즘으로 전파한 traceId/spanId를 보존하기 위해
+ * MDC.clear() 대신 키 단위 remove를 사용한다.
  */
 public class MdcFilter extends OncePerRequestFilter {
 
@@ -37,11 +37,10 @@ public class MdcFilter extends OncePerRequestFilter {
         List<String> keysAdded = new ArrayList<>();
 
         try {
-            // Always add requestId
             MDC.put(KEY_REQUEST_ID, UUID.randomUUID().toString());
             keysAdded.add(KEY_REQUEST_ID);
 
-            // Extract sessionId from URL path (e.g., /sessions/{id}/...)
+            // URL 경로에서 sessionId 추출 (예: /sessions/{id}/...)
             String path = request.getRequestURI();
             if (path != null) {
                 Matcher matcher = SESSION_ID_PATTERN.matcher(path);
@@ -51,7 +50,7 @@ public class MdcFilter extends OncePerRequestFilter {
                 }
             }
 
-            // Extract userId from query param or header
+            // 쿼리 파라미터 우선, 없으면 헤더에서 userId 추출
             String userId = request.getParameter("userId");
             if (userId == null || userId.isBlank()) {
                 userId = request.getHeader("X-User-Id");
@@ -63,7 +62,7 @@ public class MdcFilter extends OncePerRequestFilter {
 
             filterChain.doFilter(request, response);
         } finally {
-            // Targeted remove to preserve Micrometer traceId/spanId
+            // Micrometer traceId/spanId 보존을 위해 키 단위로 제거
             for (String key : keysAdded) {
                 MDC.remove(key);
             }

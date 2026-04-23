@@ -3,7 +3,7 @@ package com.example.chat.event.domain;
 import java.io.Serializable;
 import java.util.Objects;
 
-// Excluded from Lombok due to QueryDSL APT ordering conflicts
+// Lombok 미적용: QueryDSL APT 처리 순서 충돌로 인해 equals/hashCode를 직접 구현한다.
 public class EventId implements Serializable {
 
     private Long sessionId;

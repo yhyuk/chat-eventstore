@@ -13,8 +13,13 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-// Pure-function event replayer shared by SnapshotService (state building) and D5 restore API.
-// Must stay deterministic: no System.currentTimeMillis(), no random, no external IO.
+/**
+ * 이벤트를 재적용하여 세션 상태를 구성하는 순수 함수 리플레이어.
+ *
+ * <p>SnapshotService(상태 구성)와 D5 복원 API가 공유한다.
+ * 결정론(determinism)을 유지해야 하므로 다음을 절대 사용하지 말 것:
+ * System.currentTimeMillis(), 난수, 외부 IO.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -56,7 +61,7 @@ public class StateEventApplier {
     private void updatePresence(SessionState state, String userId, String presence) {
         ParticipantState current = state.getParticipants().get(userId);
         if (current == null) {
-            // Replay order anomaly -- ignore; DISCONNECT before JOIN should never happen in normal flow.
+            // 정상 흐름에서는 JOIN 이전에 DISCONNECT가 올 수 없음. 재생 순서 이상이므로 무시.
             return;
         }
         state.getParticipants().put(userId, new ParticipantState(current.userId(), current.joinedAt(), presence));

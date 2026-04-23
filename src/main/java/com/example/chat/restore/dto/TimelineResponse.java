@@ -6,8 +6,8 @@ import com.example.chat.projection.dto.SessionState.ParticipantState;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// Lists (not raw Collection views) are used for the two collections so that record equals()
-// is structural across identical restores -- critical for the determinism assertion.
+// 두 컬렉션을 List로 선언하는 이유: record의 equals()가 구조적으로 동작해야
+// 동일 복원 결과의 결정론(determinism) 검증이 가능하기 때문.
 public record TimelineResponse(
         Long sessionId,
         LocalDateTime at,

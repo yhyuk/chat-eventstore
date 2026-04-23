@@ -21,10 +21,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-// D5 restore API.
-// Determinism relies on: (1) StateEventApplier as the single pure-function replay, (2) snapshot
-// selected by lastSequence (not createdAt -- avoids async snapshot time skew), (3) events
-// filtered by server_received_at <= at with tiebreak on sequence.
+// 결정론적 복원 전략:
+// (1) StateEventApplier를 단일 순수 함수 리플레이 경로로 고정,
+// (2) 스냅샷은 createdAt 대신 lastSequence 기준 선택 (비동기 스냅샷의 시각 왜곡 방지),
+// (3) 이벤트는 server_received_at <= at 필터 후 sequence로 타이브레이크.
 @Slf4j
 @Service
 public class EventReplayService {
@@ -57,7 +57,7 @@ public class EventReplayService {
         Optional<Long> maxSeq = eventRepository
                 .findMaxSequenceBySessionIdAndServerReceivedAtLessThanEqual(sessionId, effectiveAt);
         if (maxSeq.isEmpty()) {
-            // No events up to `at`: empty state is the correct deterministic answer.
+            // 해당 시각까지 이벤트가 없으면 빈 상태가 올바른 결정론적 결과.
             return TimelineResponse.empty(sessionId, effectiveAt);
         }
 
@@ -90,8 +90,8 @@ public class EventReplayService {
         try {
             return objectMapper.readValue(json, SessionState.class);
         } catch (JsonProcessingException e) {
-            // Matches SnapshotService behavior: if a snapshot blob is corrupt, fall back to empty state
-            // and rebuild from events. Replay is still deterministic for this call.
+            // 스냅샷 블롭이 손상된 경우 빈 상태로 폴백해 이벤트 전체를 재생.
+            // SnapshotService와 동일한 정책이며, 이 호출의 결정론은 유지됨.
             log.warn("Snapshot deserialize failed during restore, falling back to empty state: {}", e.getMessage());
             return new SessionState();
         }

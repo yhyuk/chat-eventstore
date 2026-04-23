@@ -24,7 +24,7 @@ public class RedisConfig {
             @Value("${spring.data.redis.host}") String host,
             @Value("${spring.data.redis.port}") int port) {
         RedisStandaloneConfiguration standalone = new RedisStandaloneConfiguration(host, port);
-        // Bounded command timeout prevents WS message threads from blocking indefinitely when Redis degrades.
+        // Redis 장애 시 WebSocket 메시지 처리 스레드가 무한 대기하지 않도록 커맨드 타임아웃을 제한한다.
         LettuceClientConfiguration client = LettuceClientConfiguration.builder()
                 .commandTimeout(Duration.ofSeconds(2))
                 .build();

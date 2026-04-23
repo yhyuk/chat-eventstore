@@ -9,16 +9,16 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.TreeMap;
 
-// Snapshot payload. TreeMap and LinkedHashMap are used so JSON serialization order is deterministic,
-// which lets us replay the same event stream and get byte-identical stateJson for snapshot regression tests.
+// 스냅샷 페이로드. 동일한 이벤트 스트림을 재생했을 때 byte-identical stateJson을 얻기 위해
+// JSON 직렬화 순서를 결정론적으로 유지한다.
 @Getter
 public class SessionState {
 
-    // TreeMap keeps participants sorted by userId across JVM restarts.
+    // JVM 재시작 후에도 userId 기준 정렬이 유지되도록 TreeMap 사용.
     @JsonDeserialize(as = TreeMap.class)
     private final TreeMap<String, ParticipantState> participants;
 
-    // LinkedHashMap preserves message insertion order (which matches sequence-sorted apply order).
+    // sequence 순 적용 순서와 일치하는 메시지 삽입 순서를 보존하기 위해 LinkedHashMap 사용.
     @JsonDeserialize(as = LinkedHashMap.class)
     private final LinkedHashMap<Long, MessageState> messages;
 

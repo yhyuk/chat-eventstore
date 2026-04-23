@@ -33,7 +33,7 @@ public class ResumeService {
         if (!cached.isEmpty()) {
             return toFrame(cached);
         }
-        // Cache miss or partial -> fall back to DB for authoritative ordering.
+        // 캐시 미스 또는 일부 누락 시 DB에서 권위 있는 순서로 조회.
         List<Event> fromDb = eventRepository
                 .findBySessionIdAndSequenceGreaterThanOrderBySequenceAsc(sessionId, lastSequence);
         if (fromDb.isEmpty()) {

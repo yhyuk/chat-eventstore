@@ -52,8 +52,10 @@ public class SnapshotService {
         this.threshold = threshold;
     }
 
-    // Called by OutboxPoller inside the per-event transaction after projection.apply().
-    // Threshold check is cheap; building the snapshot is only triggered every `threshold` events.
+    /**
+     * OutboxPoller가 projection.apply() 직후 이벤트별 트랜잭션 안에서 호출.
+     * 임계치 체크는 저렴하므로 매번 수행하되, 실제 스냅샷 생성은 {@code threshold} 이벤트마다 한 번씩만 트리거된다.
+     */
     @Transactional
     public void createSnapshotIfNeeded(Event event) {
         Optional<SessionProjection> projection = projectionRepository.findById(event.getSessionId());
@@ -71,7 +73,7 @@ public class SnapshotService {
     public void createSnapshot(Long sessionId) {
         Optional<Snapshot> latest = snapshotRepository.findTopBySessionIdOrderByVersionDesc(sessionId);
         long fromSequenceExclusive = latest.map(Snapshot::getLastSequence).orElse(0L);
-        // For sessions with 100k+ events, consider paging. D4 task scope: no paging needed.
+        // 세션당 10만 건 이상 이벤트가 쌓이면 페이징 도입 검토 필요. D4 범위에서는 페이징 없이 전량 로드.
         List<Event> toApply = eventRepository.findBySessionIdAndSequenceGreaterThanOrderBySequenceAsc(
                 sessionId, fromSequenceExclusive);
         if (toApply.isEmpty() && latest.isEmpty()) {
@@ -104,14 +106,18 @@ public class SnapshotService {
                 .build();
         snapshotRepository.save(snapshot);
 
-        // Retain the latest RETENTION snapshots (e.g. 3); older rows are wiped with a Native
-        // DELETE because Snapshot is @Immutable and Spring Data derived delete would no-op.
+        // 최신 RETENTION개(예: 3)만 보존. Snapshot 엔티티가 @Immutable이라 Spring Data 파생 delete가
+        // 무시되므로 Native DELETE로 직접 제거해야 함.
         snapshotRepository.deleteOldSnapshotsNative(sessionId, nextVersion - (RETENTION - 1));
         log.info("Snapshot created: sessionId={}, version={}, lastSequence={}", sessionId, nextVersion, lastSequence);
     }
 
-    // Session end flow -- runs in its own transaction so a snapshot failure does not roll back
-    // the session end commit. Caller wraps this in try/catch and logs a warning on failure.
+    /**
+     * 세션 종료 시 호출되는 최종 스냅샷.
+     *
+     * <p>스냅샷 생성 실패가 세션 종료 커밋을 롤백시키지 않도록 별도 트랜잭션(REQUIRES_NEW)으로 분리.
+     * 호출 측에서 try/catch로 감싸 실패 시 경고 로그만 남기도록 약속한다.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createFinalSnapshot(Long sessionId) {
         Session session = sessionRepository.findById(sessionId).orElse(null);

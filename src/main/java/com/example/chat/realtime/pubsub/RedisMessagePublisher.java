@@ -25,8 +25,8 @@ public class RedisMessagePublisher {
         } catch (JsonProcessingException e) {
             log.warn("Failed to serialize broadcast frame: sessionId={}", sessionId, e);
         } catch (Exception e) {
-            // Lettuce command timeout / connection failure falls here.
-            // Downstream callers still ACK the client — broadcast failure is graceful degradation.
+            // Lettuce 커맨드 타임아웃/연결 실패가 여기 해당.
+            // 발행 실패 시에도 호출부는 클라이언트에게 ACK를 전송 — broadcast 실패는 graceful degradation으로 처리.
             log.warn("Redis publish failed: sessionId={}, error={}", sessionId, e.getMessage());
         }
     }

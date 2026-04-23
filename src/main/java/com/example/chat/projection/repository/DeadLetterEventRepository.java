@@ -12,8 +12,8 @@ public interface DeadLetterEventRepository extends JpaRepository<DeadLetterEvent
 
     List<DeadLetterEvent> findAllByOrderByMovedAtDesc();
 
-    // @Immutable entity: derived deleteById is a no-op in Hibernate, so admin cleanup
-    // uses a Native DELETE keyed by the surrogate id column.
+    // @Immutable 엔티티는 Hibernate의 derived deleteById가 no-op이므로,
+    // 관리자 삭제 시 surrogate id 컬럼을 기준으로 Native DELETE를 직접 실행한다.
     @Modifying(clearAutomatically = true)
     @Query(
             value = "DELETE FROM dead_letter_events WHERE id = :id",

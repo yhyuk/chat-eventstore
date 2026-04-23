@@ -168,7 +168,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         sendFrame(webSocketSession, new ErrorFrame(code, message), "ERROR");
     }
 
-    // Serialization envelope: Jackson serializes this as { "frameType": "...", "body": {...} }.
+    // Jackson 직렬화 결과: { "frameType": "...", "body": {...} }.
     private record FrameEnvelope(String frameType, Object body) {
     }
 }

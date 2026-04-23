@@ -11,8 +11,8 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-// Applies a single event to the read-model counters. No persistence-context branching --
-// the single upsert below handles both first-INSERT and idempotent UPDATE paths.
+// 단일 이벤트를 읽기 모델 카운터에 적용한다. 퍼시스턴스 컨텍스트 분기 없이
+// 아래 단일 upsert가 최초 INSERT와 멱등 UPDATE 경로를 모두 처리한다.
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -35,12 +35,12 @@ public class ProjectionService {
             case JOIN -> participantCount += 1;
             case LEAVE -> participantCount = Math.max(0, participantCount - 1);
             case DISCONNECT, RECONNECT, EDIT, DELETE -> {
-                // Tombstones and presence-only events do not move aggregate counters.
+                // Tombstone(EDIT/DELETE)과 접속 상태 전용 이벤트는 집계 카운터를 변경하지 않는다.
             }
         }
 
-        // last_applied_event_id guards double-apply: the upsert only overwrites counters
-        // when the incoming event id is greater than what is already stored.
+        // last_applied_event_id가 중복 적용을 방지한다: 유입 이벤트 id가 이미 저장된 값보다
+        // 클 때만 카운터를 덮어쓴다.
         repository.upsertProjection(
                 event.getSessionId(),
                 participantCount,

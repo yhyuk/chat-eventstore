@@ -40,8 +40,8 @@ public class SessionQueryRepositoryImpl implements SessionQueryRepository {
             where.and(qSession.createdAt.lt(to));
         }
         if (participant != null) {
-            // EXISTS avoids cardinality explosion vs JOIN when a session has multiple participants.
-            // Participant maps session via @ManyToOne so the QueryDSL path is session.id, not sessionId.
+            // 참여자가 여럿인 세션에서 JOIN 대신 EXISTS를 사용해 카디널리티 폭발을 방지한다.
+            // Participant는 session을 @ManyToOne으로 참조하므로 QueryDSL 경로는 session.id를 사용한다.
             where.and(JPAExpressions.selectOne()
                     .from(qParticipant)
                     .where(qParticipant.session.id.eq(qSession.id)

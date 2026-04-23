@@ -5,7 +5,7 @@ import com.example.chat.session.dto.SessionListResponse;
 
 import java.time.LocalDateTime;
 
-// Fragment for dynamic session search, composed into SessionRepository via multi-interface inheritance.
+// 동적 세션 검색용 프래그먼트. SessionRepository에 다중 인터페이스 상속으로 조합된다.
 public interface SessionQueryRepository {
 
     SessionListResponse search(SessionStatus status,

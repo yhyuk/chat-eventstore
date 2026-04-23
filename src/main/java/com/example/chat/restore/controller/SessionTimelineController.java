@@ -19,8 +19,8 @@ public class SessionTimelineController {
 
     private final EventReplayService eventReplayService;
 
-    // `at` omitted -> service substitutes LocalDateTime.now() (i.e. "current state").
-    // `at` in the future is accepted as-is; semantically equivalent to "now" given no future events exist.
+    // `at` 생략 시 서비스에서 LocalDateTime.now() 로 대체 (현재 상태 조회).
+    // 미래 시각을 전달해도 허용하며, 미래 이벤트가 존재하지 않으므로 의미상 "현재"와 동일.
     @GetMapping("/{id}/timeline")
     public TimelineResponse getTimeline(
             @PathVariable Long id,

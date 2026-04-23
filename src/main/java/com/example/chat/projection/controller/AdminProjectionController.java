@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// Admin-only projection operations. See DlqAdminController for the same non-goal auth note.
 @RestController
 @RequestMapping("/admin/projections")
 @RequiredArgsConstructor

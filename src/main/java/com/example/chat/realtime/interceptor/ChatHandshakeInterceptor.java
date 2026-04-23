@@ -102,7 +102,6 @@ public class ChatHandshakeInterceptor implements HandshakeInterceptor {
         return out;
     }
 
-    // Expose servlet request for tests/debugging if needed.
     @SuppressWarnings("unused")
     private boolean isServletRequest(ServerHttpRequest request) {
         return request instanceof ServletServerHttpRequest;

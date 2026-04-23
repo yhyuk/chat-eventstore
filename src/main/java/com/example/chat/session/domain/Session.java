@@ -51,7 +51,7 @@ public class Session {
             return;
         }
         this.status = SessionStatus.ENDED;
-        // Truncate to MySQL DATETIME(3) precision so in-memory value matches what the DB will return on re-read.
+        // MySQL DATETIME(3) 정밀도에 맞춰 truncate. 인메모리 값과 DB 재조회 값이 일치하도록 한다.
         this.endedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
     }
 

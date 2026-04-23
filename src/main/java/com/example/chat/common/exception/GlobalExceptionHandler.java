@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "Malformed request body"));
     }
 
-    // 4xx client input errors: log at WARN (expected, not a server defect).
+    // 4xx 클라이언트 입력 오류는 서버 결함이 아니므로 WARN 레벨로 기록한다.
     @ExceptionHandler({
             MethodArgumentTypeMismatchException.class,
             MissingServletRequestParameterException.class,
@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, ex.getMessage()));
     }
 
-    // 404 for unmapped static resources / paths: log at DEBUG to avoid noise.
+    // 존재하지 않는 정적 리소스/경로 404는 노이즈 방지를 위해 DEBUG 레벨로 기록한다.
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException ex) {
         log.debug("Resource not found: {}", ex.getResourcePath());

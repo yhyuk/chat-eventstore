@@ -6,8 +6,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-// Dedicated ObjectMapper for snapshot stateJson so key ordering stays deterministic even if
-// callers accidentally swap the Map type -- belt-and-braces for snapshot regression safety.
+// 스냅샷 stateJson 전용 ObjectMapper. Map 타입을 잘못 사용하더라도 키 순서가 항상 결정론적으로 유지되도록
+// ORDER_MAP_ENTRIES_BY_KEYS를 강제 적용한다 — 스냅샷 회귀 테스트의 안전망.
 @Configuration
 public class SnapshotObjectMapperConfig {
 

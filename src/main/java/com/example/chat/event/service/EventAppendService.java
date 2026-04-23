@@ -34,12 +34,9 @@ public class EventAppendService {
     private final TransactionTemplate readOnlyTemplate;
     private final ChatMetrics chatMetrics;
 
-    // Injected via @PersistenceContext so the EntityManager is tx-scoped and shares the
-    // writeTemplate's transaction. Using em.persist(...) explicitly forces INSERT semantics.
-    // Without this, JpaRepository.saveAndFlush() on an entity whose @IdClass fields are
-    // pre-populated (as Event is) goes through em.merge(...) and can silently UPDATE an
-    // existing row -- bypassing the UK(session_id, client_event_id) constraint that the
-    // append path relies on for duplicate detection.
+    // @IdClass 필드가 미리 채워진 Event는 JpaRepository.save()가 em.merge()로 동작해
+    // 기존 행을 조용히 UPDATE할 수 있다. em.persist()를 직접 호출해 INSERT 의미론을 강제하고,
+    // UK(session_id, client_event_id) 제약 위반을 통한 중복 감지 경로가 정상 작동하도록 한다.
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -59,7 +56,6 @@ public class EventAppendService {
     }
 
     public AppendResult append(Long sessionId, AppendEventRequest request) {
-        // Fail-fast: sequence must be strictly positive. Matches ClientEventFrame @Positive validation.
         if (request.sequence() == null || request.sequence() <= 0) {
             throw new InvalidSequenceException(sessionId, request.sequence());
         }
@@ -67,8 +63,6 @@ public class EventAppendService {
         String payloadJson = serializePayload(request.payload());
 
         try {
-            // Primary write: INSERT + UPDATE last_sequence in one transaction.
-            // Throws DataIntegrityViolationException on UNIQUE/PK conflict, rollback guaranteed.
             Event saved = writeTemplate.execute(status -> {
                 Event event = Event.builder()
                         .sessionId(sessionId)
@@ -79,10 +73,6 @@ public class EventAppendService {
                         .payload(payloadJson)
                         .clientTimestamp(request.clientTimestamp())
                         .build();
-                // @DynamicInsert omits null fields (projectionStatus, retryCount, nextRetryAt,
-                // lastError, id, serverReceivedAt) so DB DEFAULT and @Generated(INSERT) apply.
-                // persist() forces INSERT semantics (unlike save()/saveAndFlush() which use merge
-                // when @IdClass fields are pre-set and may silently UPDATE, masking UK violations).
                 entityManager.persist(event);
                 entityManager.flush();
                 sessionRepository.updateLastSequence(sessionId, request.sequence());
@@ -97,9 +87,8 @@ public class EventAppendService {
         } catch (DataIntegrityViolationException ex) {
             return resolveConflict(sessionId, request, ex);
         } catch (PersistenceException ex) {
-            // em.persist()+em.flush() is not wrapped by Spring Data proxies, so raw
-            // Hibernate ConstraintViolationException is thrown. Translate to the same
-            // conflict resolution path.
+            // em.persist()+em.flush()는 Spring Data 프록시로 감싸지지 않아 Hibernate
+            // ConstraintViolationException이 직접 던져진다. 동일한 충돌 해소 경로로 변환한다.
             if (ex.getCause() instanceof ConstraintViolationException
                     || ex instanceof ConstraintViolationException) {
                 return resolveConflict(sessionId, request,
@@ -112,21 +101,21 @@ public class EventAppendService {
     private AppendResult resolveConflict(Long sessionId, AppendEventRequest request,
                                          DataIntegrityViolationException original) {
         return readOnlyTemplate.execute(status -> {
-            // Step 1: PK conflict (session_id, sequence)
+            // 1단계: PK(session_id, sequence) 충돌 확인
             Optional<Event> bySeq = eventRepository.findBySessionIdAndSequence(sessionId, request.sequence());
             if (bySeq.isPresent()) {
                 Event existing = bySeq.get();
                 if (existing.getClientEventId().equals(request.clientEventId())) {
-                    // Called from within catch(DataIntegrityViolationException); the outer
-                    // catch(DuplicateEventException) is NOT re-entered, so bump metrics here.
+                    // catch(DataIntegrityViolationException) 내부에서 호출되므로 외부 catch(DuplicateEventException)로 재진입하지 않는다.
+                    // 메트릭을 여기서 직접 증가시킨다.
                     chatMetrics.incEventsReceived(request.type(), "DUPLICATE_IGNORED");
                     chatMetrics.incDuplicates();
                     throw new DuplicateEventException(existing.getId(), existing.getSequence());
                 }
-                // Different clientEventId at same sequence -> real conflict.
+                // 같은 sequence에 다른 clientEventId -> 실제 순서 충돌
                 throw new InvalidSequenceException(sessionId, request.sequence());
             }
-            // Step 2: UK conflict (session_id, client_event_id) at different sequence
+            // 2단계: UK(session_id, client_event_id) 충돌 — 다른 sequence로 재전송된 중복 이벤트
             Optional<Event> byClientId = eventRepository.findBySessionIdAndClientEventId(
                     sessionId, request.clientEventId());
             if (byClientId.isPresent()) {
@@ -135,7 +124,7 @@ public class EventAppendService {
                 chatMetrics.incDuplicates();
                 throw new DuplicateEventException(existing.getId(), existing.getSequence());
             }
-            // Step 3: neither key conflicts — constraint other than (PK, UK) fired. Rethrow original.
+            // 3단계: PK/UK 이외의 제약 위반 — 예상치 못한 오류이므로 원본 예외를 다시 던진다.
             log.warn("Unexpected DataIntegrityViolation without matching PK/UK row: sessionId={}, sequence={}",
                     sessionId, request.sequence());
             throw original;
