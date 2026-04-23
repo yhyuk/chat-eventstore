@@ -19,8 +19,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-// Admin-only DLQ operations. Auth is a task non-goal; production use should gate this via
-// network isolation or a security filter (documented in README).
+// 인증은 과제 Non-goal. 프로덕션 환경에서는 네트워크 격리나 시큐리티 필터로 보호해야 한다 (README 참고).
 @Slf4j
 @RestController
 @RequestMapping("/admin/dlq")
@@ -37,8 +36,7 @@ public class DlqAdminController {
                 .toList();
     }
 
-    // Single transaction so PENDING reset and DLQ row deletion either both commit or both roll back,
-    // avoiding the risk of a duplicate re-processing loop.
+    // 단일 트랜잭션으로 PENDING 초기화와 DLQ 행 삭제를 묶는다 — 둘 중 하나만 커밋되면 중복 재처리 루프가 발생할 수 있다.
     @PostMapping("/{id}/retry")
     @Transactional
     public ResponseEntity<?> retry(@PathVariable Long id) {
@@ -58,7 +56,7 @@ public class DlqAdminController {
         eventRepository.updateProjectionStatus(
                 dlq.getSessionId(),
                 dlq.getSequence(),
-                ProjectionStatus.PENDING.name(),
+                ProjectionStatus.PENDING,
                 0,
                 LocalDateTime.now(),
                 null

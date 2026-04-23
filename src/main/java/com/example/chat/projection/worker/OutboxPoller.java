@@ -86,9 +86,9 @@ public class OutboxPoller {
     public void drain() {
         MDC.put("batchId", UUID.randomUUID().toString());
         try {
-            // Step 1: batch ID fetch in its own transaction so the SKIP LOCKED row locks are
-            // released immediately. Re-fetch + per-event idempotent processing is safe because
-            // last_applied_event_id in SessionProjection guards against double application.
+            // Step 1: 배치 ID 조회는 별도 트랜잭션에서 수행하여 SKIP LOCKED 행 락을 즉시 해제한다.
+            // 이후 이벤트별로 재조회 + 멱등 처리하는 방식이 안전한 이유는
+            // SessionProjection.last_applied_event_id가 중복 적용을 차단하기 때문.
             List<EventIdProjection> ids = batchReadTemplate.execute(status ->
                     eventRepository.fetchPendingEventIds(batchSize));
 
@@ -100,8 +100,8 @@ public class OutboxPoller {
                 processOne(id.getSessionId(), id.getSequence());
             }
         } catch (Exception ex) {
-            // @Scheduled swallows exceptions silently; catch here so DB outages are visible
-            // in logs but do not kill the scheduler thread.
+            // @Scheduled는 예외를 조용히 삼키므로 여기서 잡아 로그에 남긴다.
+            // DB 장애를 가시화하면서도 스케줄러 스레드가 죽지 않도록 보호.
             log.warn("Outbox polling failed, will retry next cycle", ex);
         } finally {
             MDC.remove("batchId");
@@ -109,9 +109,9 @@ public class OutboxPoller {
     }
 
     private void processOne(Long sessionId, Long sequence) {
-        // First transaction: apply + mark DONE. If apply() throws, we swallow the exception
-        // inside the lambda so the outer transaction can still commit the rollback of the
-        // projection upsert, and then hand off to a fresh transaction for the status UPDATE.
+        // 첫 트랜잭션: apply + DONE 마킹. apply()가 예외를 던지면 람다 내부에서 잡아
+        // 부모 트랜잭션이 projection upsert를 롤백할 수 있게 한 뒤, 상태 UPDATE는
+        // 별도 신규 트랜잭션에서 수행한다(롤백된 트랜잭션에 묶이지 않도록).
         ApplyFailure failure = eventProcessTemplate.execute(status -> {
             Event event = eventRepository.findBySessionIdAndSequence(sessionId, sequence).orElse(null);
             if (event == null || event.getProjectionStatus() != ProjectionStatus.PENDING) {
@@ -122,7 +122,7 @@ public class OutboxPoller {
                 eventRepository.updateProjectionStatus(
                         event.getSessionId(),
                         event.getSequence(),
-                        ProjectionStatus.DONE.name(),
+                        ProjectionStatus.DONE,
                         event.getRetryCount(),
                         event.getNextRetryAt(),
                         null
@@ -138,7 +138,7 @@ public class OutboxPoller {
         if (failure == null) {
             return;
         }
-        // Separate transaction so the status UPDATE is not discarded by the rolled-back parent.
+        // 롤백된 부모 트랜잭션에 status UPDATE가 함께 폐기되지 않도록 신규 트랜잭션으로 분리.
         eventProcessTemplate.execute(status -> {
             handleFailure(failure.event(), failure.error());
             return null;
@@ -155,19 +155,19 @@ public class OutboxPoller {
             eventRepository.updateProjectionStatus(
                     event.getSessionId(),
                     event.getSequence(),
-                    ProjectionStatus.FAILED.name(),
+                    ProjectionStatus.FAILED,
                     nextRetry,
                     event.getNextRetryAt(),
                     truncate(ex.getMessage(), 1024)
             );
             return;
         }
-        long backoffSeconds = 1L << nextRetry; // 2, 4, 8, 16 seconds
+        long backoffSeconds = 1L << nextRetry; // 지수 백오프: 2, 4, 8, 16초
         LocalDateTime nextAt = LocalDateTime.now().plusSeconds(backoffSeconds);
         eventRepository.updateProjectionStatus(
                 event.getSessionId(),
                 event.getSequence(),
-                ProjectionStatus.PENDING.name(),
+                ProjectionStatus.PENDING,
                 nextRetry,
                 nextAt,
                 truncate(ex.getMessage(), 1024)

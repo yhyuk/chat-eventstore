@@ -13,15 +13,21 @@ public interface SnapshotRepository extends JpaRepository<Snapshot, SnapshotId> 
 
     Optional<Snapshot> findTopBySessionIdOrderByVersionDesc(Long sessionId);
 
-    // D5 restore: pick the newest snapshot that covers events up to a given maxSequence.
-    // Using lastSequence (not createdAt) avoids the time-skew caused by async snapshot creation.
+    /**
+     * 특정 시점 복원용 최신 스냅샷 조회.
+     *
+     * <p>비동기 스냅샷 생성 환경에서 createdAt은 시간 왜곡이 발생할 수 있어
+     * lastSequence(이벤트 진행 위치)를 기준으로 조회한다.
+     */
     Optional<Snapshot> findTopBySessionIdAndLastSequenceLessThanEqualOrderByVersionDesc(
             Long sessionId, Long maxSequence);
 
     int countBySessionId(Long sessionId);
 
-    // @Immutable entity: Spring Data derived delete is silently ignored by Hibernate,
-    // so retention cleanup uses a Native DELETE to bypass the persistence context entirely.
+    /**
+     * @Immutable 엔티티는 Spring Data의 derived delete가 Hibernate에서 무시되므로,
+     * retention 정리/rebuild 시 영속성 컨텍스트를 우회하는 Native DELETE를 사용한다.
+     */
     @Modifying(clearAutomatically = true)
     @Query(
             value = "DELETE FROM snapshots WHERE session_id = :sessionId AND version < :version",
@@ -30,7 +36,6 @@ public interface SnapshotRepository extends JpaRepository<Snapshot, SnapshotId> 
     int deleteOldSnapshotsNative(@Param("sessionId") Long sessionId,
                                  @Param("version") Integer version);
 
-    // D5 rebuild: wipe all snapshots for a session prior to full replay.
     @Modifying(clearAutomatically = true)
     @Query(
             value = "DELETE FROM snapshots WHERE session_id = :sessionId",

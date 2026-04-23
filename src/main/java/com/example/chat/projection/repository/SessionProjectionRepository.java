@@ -5,14 +5,19 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 public interface SessionProjectionRepository extends JpaRepository<SessionProjection, Long> {
 
-    // Native UPSERT with MySQL 8.0.20+ row alias syntax (avoids VALUES() deprecation).
-    // Idempotency: only overwrite counter fields when the incoming event is newer than
-    // what is already persisted (last_applied_event_id guards against double-apply).
+    /**
+     * MySQL 8.0.20+ row alias 문법을 사용한 Native UPSERT.
+     *
+     * <p>JPQL은 UPSERT 구문을 지원하지 않으므로 Native가 강제된다.
+     * 또한 VALUES() 함수가 deprecated되어 {@code AS new} row alias로 대체했다.
+     * 멱등성 보장: 유입 이벤트의 last_applied_event_id가 저장된 값보다 큰 경우에만 카운터를 덮어쓴다.
+     */
     @Modifying(clearAutomatically = true)
     @Query(
             value = "INSERT INTO session_projection "
@@ -36,12 +41,11 @@ public interface SessionProjectionRepository extends JpaRepository<SessionProjec
                          @Param("lastMessageAt") LocalDateTime lastMessageAt,
                          @Param("lastAppliedEventId") Long lastAppliedEventId);
 
-    // D5 rebuild: wipe projection row so the subsequent upsert inserts a fresh INSERT path
-    // without tripping the last_applied_event_id monotonicity guard.
+    /**
+     * rebuild 시 projection 행을 삭제하여 이후 upsert가 last_applied_event_id 단조 증가 가드에 걸리지 않고
+     * 신규 INSERT 경로로 진입하도록 한다.
+     */
     @Modifying(clearAutomatically = true)
-    @Query(
-            value = "DELETE FROM session_projection WHERE session_id = :sessionId",
-            nativeQuery = true
-    )
-    int deleteByIdNative(@Param("sessionId") Long sessionId);
+    @Transactional
+    int deleteBySessionId(Long sessionId);
 }
