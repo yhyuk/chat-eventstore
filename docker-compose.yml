@@ -114,6 +114,7 @@ services:
     container_name: chat-zipkin
     environment:
       QUERY_PORT: "9211"
+      COLLECTOR_HTTP_PORT: "9211"
     ports: ["9211:9211"]
 
 volumes:

@@ -4,11 +4,11 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://prometheus:9190
     isDefault: true
     editable: true
   - name: Zipkin
     type: zipkin
     access: proxy
-    url: http://zipkin:9411
+    url: http://zipkin:9211
     editable: true
