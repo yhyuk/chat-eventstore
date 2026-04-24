@@ -184,7 +184,7 @@ chat-eventstore/
 │   ├── 08-failure-scenarios.md
 │   ├── 09-testing-and-load.md
 │   ├── 10-query-optimization.md   # 주요 쿼리 + 인덱스 근거 + EXPLAIN
-│   ├── 12-ai-harness-engineering.md  # 4역할 AI 페어 프로그래밍 회고
+│   ├── 11-ai-harness-engineering.md  # 4역할 AI 페어 프로그래밍 회고
 │   ├── images/                    # 대시보드 스크린샷 등 (CAPTURE.md 가이드 포함)
 │   └── load-test-results/         # k6 결과 JSON
 ├── openapi/

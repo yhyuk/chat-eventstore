@@ -276,4 +276,4 @@ src/main/java/com/example/chat/
 - `08-docker-compose.md` — 로컬 환경 구성
 - `09-failure-scenarios.md` — 장애 대응 시나리오
 - `10-testing-and-load.md` — 테스트 전략, k6 스크립트
-- `11-weekly-roadmap.md` — 일주일 일정 및 마일스톤
+- `11-ai-harness-engineering.md` — AI 하네스 엔지니어링 (개발 방법론)

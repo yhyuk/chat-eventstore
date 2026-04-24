@@ -110,7 +110,7 @@ chat-eventstore/
 │   ├── 08-failure-scenarios.md
 │   ├── 09-testing-and-load.md
 │   ├── 10-query-optimization.md
-│   ├── 12-ai-harness-engineering.md
+│   ├── 11-ai-harness-engineering.md
 │   └── images/                     # Grafana / Zipkin 스크린샷
 │
 ├── openapi/openapi.yaml            # OpenAPI 영어 스펙
@@ -298,7 +298,7 @@ k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json sc
 | 08 | 장애 시나리오 | [docs/08-failure-scenarios.md](docs/08-failure-scenarios.md) | 3가지 장애: 감지 → 완화 → 복구 |
 | 09 | 테스트 + 부하 | [docs/09-testing-and-load.md](docs/09-testing-and-load.md) | 단위/통합/부하 테스트 전략 |
 | 10 | 쿼리 최적화 | [docs/10-query-optimization.md](docs/10-query-optimization.md) | EXPLAIN 분석, 인덱스 활용 |
-| 12 | AI 하네스 엔지니어링 | [docs/12-ai-harness-engineering.md](docs/12-ai-harness-engineering.md) | 4역할 AI 팀 합의 사이클, 결함 차단 사례 |
+| 11 | AI 하네스 엔지니어링 | [docs/11-ai-harness-engineering.md](docs/11-ai-harness-engineering.md) | 4역할 AI 팀 합의 사이클, 결함 차단 사례 |
 
 ---
 
@@ -352,7 +352,7 @@ k6 run --summary-export=docs/load-test-results/k6-$(date +%Y%m%d-%H%M%S).json sc
 
 `Planner v1 → Architect → Planner v2 → Critic → Planner v3 → Executor` 합의 사이클을 강제하여 결함을 코드 진입 전에 차단한다.
 
-상세 도구 스택, 결함 차단 사례는 [docs/12-ai-harness-engineering.md](docs/12-ai-harness-engineering.md) 참조.
+상세 도구 스택, 결함 차단 사례는 [docs/11-ai-harness-engineering.md](docs/11-ai-harness-engineering.md) 참조.
 
 ---
 
