@@ -38,6 +38,8 @@
 
 ### 2.1 동작 — 2단계 트랜잭션
 
+![아웃박스 폴링 → Projection → DLQ](images/flow-outbox-projection-dlq.png)
+
 `OutboxPoller`는 **배치 ID 조회 트랜잭션**과 **이벤트별 처리 트랜잭션**을 분리해 운영한다.
 이렇게 한 이유:
 

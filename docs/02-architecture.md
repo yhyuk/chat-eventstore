@@ -23,17 +23,23 @@
 4. 다른 Spring Boot 인스턴스에 연결된 참여자들에게 메시지 전달
 5. 이후 아웃박스 워커가 projection/snapshot 업데이트
 
+![이벤트 전파 플로우](images/flow-event-propagation.png)
+
 ### (B) 재연결 / Resume 플로우
 1. Client가 재연결, `?lastSequence=N` 파라미터 전달
 2. 서버가 Redis `session:{id}:recent` Sorted Set 확인
 3. 캐시 hit: Sorted Set에서 `score > N` 항목 즉시 전달
 4. 캐시 miss: MySQL `events`에서 `sequence > N` 조회 후 전달
 
+![WebSocket 재연결 + Resume](images/flow-websocket-resume.png)
+
 ### (C) 상태 복원 플로우
 1. `GET /sessions/{id}/timeline?at=2026-04-21T15:00:00Z`
 2. 가장 가까운 이전 snapshot 로드 (없으면 빈 상태)
 3. snapshot 이후부터 `at` 까지의 이벤트 리플레이
 4. 결과 상태 반환 (참여자 목록, 메시지 목록, 메시지별 상태)
+
+![Timeline 복원 (Snapshot + Replay)](images/flow-timeline-restore.png)
 
 ## 3. 도메인 모델
 

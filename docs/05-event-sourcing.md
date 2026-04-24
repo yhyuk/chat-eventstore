@@ -10,6 +10,8 @@
 - INSERT 시 `DataIntegrityViolationException` 발생 → 애플리케이션에서 무시 또는 기존 이벤트 조회 후 ACK 반환
 - `clientEventId`는 UUID v4 권장 (클라이언트 라이브러리에서 재전송 시 동일 값 유지)
 
+![중복 이벤트 감지 플로우](images/flow-duplicate-detection.png)
+
 ### 1.3 트레이드오프
 
 | 전략 | 장점 | 단점 | 채택 |
