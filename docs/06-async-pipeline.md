@@ -36,55 +36,108 @@
 
 ## 2. 아웃박스 워커 설계
 
-### 2.1 동작
+### 2.1 동작 — 2단계 트랜잭션
+
+`OutboxPoller`는 **배치 ID 조회 트랜잭션**과 **이벤트별 처리 트랜잭션**을 분리해 운영한다.
+이렇게 한 이유:
+
+- SKIP LOCKED로 잡은 row 락을 짧게 유지해, 다른 워커가 다음 사이클에서 빨리 다음 batch를 잡을 수 있도록.
+- 단일 이벤트의 apply 실패가 batch 전체를 롤백시키지 않도록.
+- `session_projection.last_applied_event_id`로 멱등성이 보장되므로 batch 락 없이도 중복 적용은 차단된다.
+
 ```java
-@Scheduled(fixedDelay = 500)
+@Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:500}")
+public void scheduled() { drain(); }
+
 public void drain() {
-    List<EventEntity> batch = eventRepo.fetchPendingForUpdate(BATCH_SIZE);
-    for (EventEntity e : batch) {
-        try {
-            projectionService.apply(e);
-            e.setProjectionStatus(DONE);
-        } catch (Exception ex) {
-            handleFailure(e, ex);
+    MDC.put("batchId", UUID.randomUUID().toString());
+    try {
+        // Step 1: 배치 ID만 SKIP LOCKED로 조회 후 트랜잭션 즉시 종료 (락 해제)
+        List<EventIdProjection> ids = batchReadTemplate.execute(s ->
+                eventRepository.fetchPendingEventIds(batchSize));
+
+        if (ids == null || ids.isEmpty()) return;
+
+        for (EventIdProjection id : ids) {
+            processOne(id.getSessionId(), id.getSequence());
         }
+    } catch (Exception ex) {
+        // @Scheduled 예외 swallow 방지 + 다음 사이클 대기
+        log.warn("Outbox polling failed, will retry next cycle", ex);
+    } finally {
+        MDC.remove("batchId");
     }
+}
+
+private void processOne(Long sessionId, Long sequence) {
+    // Step 2-a: apply + DONE 마킹 (단일 트랜잭션). 실패 시 setRollbackOnly + ApplyFailure 반환.
+    ApplyFailure failure = eventProcessTemplate.execute(status -> {
+        Event event = eventRepository.findBySessionIdAndSequence(sessionId, sequence).orElse(null);
+        if (event == null || event.getProjectionStatus() != ProjectionStatus.PENDING) {
+            return null;  // 다른 워커가 이미 처리했거나 DONE/FAILED
+        }
+        try {
+            projectionService.apply(event);
+            eventRepository.updateProjectionStatus(sessionId, sequence,
+                    ProjectionStatus.DONE, event.getRetryCount(), event.getNextRetryAt(), null);
+            snapshotService.createSnapshotIfNeeded(event);
+            return null;
+        } catch (Exception ex) {
+            status.setRollbackOnly();
+            return new ApplyFailure(event, ex);
+        }
+    });
+
+    if (failure == null) return;
+
+    // Step 2-b: 실패 처리는 신규 트랜잭션. 부모 트랜잭션이 롤백돼도 status UPDATE는 보존.
+    eventProcessTemplate.execute(s -> { handleFailure(failure.event(), failure.error()); return null; });
 }
 ```
 
-### 2.2 핵심 쿼리 (Native, SKIP LOCKED)
+### 2.2 핵심 쿼리 (Native, EventIdProjection)
+
 ```sql
-SELECT id, session_id, sequence, client_event_id, type, payload, ...
+-- EventRepository.fetchPendingEventIds — 인터페이스 프로젝션으로 (session_id, sequence)만 조회
+SELECT session_id AS sessionId, sequence AS sequence
 FROM events
 WHERE projection_status = 'PENDING'
-  AND next_retry_at <= NOW(3)
+  AND next_retry_at <= CURRENT_TIMESTAMP(3)
 ORDER BY id ASC
 LIMIT :limit
 FOR UPDATE SKIP LOCKED
 ```
-- **트랜잭션 경계:** `fetch → apply → status 업데이트`를 동일 트랜잭션 유지 → 락이 자동 해제될 때까지 다른 워커가 못 잡음.
-- **SKIP LOCKED**: 여러 워커 인스턴스가 경합 없이 서로 다른 row 처리.
+
+- **인터페이스 프로젝션**으로 `id/sequence`만 받고 본문 컬럼은 처리 단계에서 `findBySessionIdAndSequence`로 재조회. 영속성 컨텍스트 오염 방지.
+- **FAILED 미포함**: SKIP LOCKED 조회는 PENDING만. FAILED는 DLQ retry API가 PENDING으로 리셋한 뒤 다음 폴링 사이클에서 다시 잡힌다.
+- **트랜잭션 경계:** Step 1은 ID 조회 직후 즉시 commit하여 행 락 해제. 이벤트별 처리는 Step 2의 별도 짧은 트랜잭션.
 
 ### 2.3 멱등성 보장
-- `session_projection.last_applied_event_id` 비교:
-  ```sql
-  UPDATE session_projection
-  SET ... , last_applied_event_id = :eventId
-  WHERE session_id = :sid AND last_applied_event_id < :eventId
-  ```
-- 이미 적용된 이벤트는 `WHERE` 조건으로 스킵.
+
+- `SessionProjectionRepository.upsertProjection`는 `INSERT ... ON DUPLICATE KEY UPDATE` 단일 쿼리에서
+  `last_applied_event_id < new.last_applied_event_id` 조건일 때만 갱신한다 (`AS new` row alias 사용, MySQL 8.0.20+).
+- 이미 적용된 이벤트는 카운터 증가 없이 통과 → 두 워커가 같은 이벤트를 잡아도 안전.
 
 ### 2.4 재시도 정책 (지수 백오프)
-| retry_count | next_retry_at delay |
-|---|---|
-| 0 | 즉시 |
-| 1 | 2초 |
-| 2 | 4초 |
-| 3 | 8초 |
-| 4 | 16초 |
-| 5 → DLQ | — |
 
-**최대 재시도 5회**, 6회째 실패 시 `dead_letter_events` 이관.
+`OutboxPoller.handleFailure`의 실제 동작:
+
+```java
+int nextRetry = event.getRetryCount() + 1;
+if (nextRetry >= maxRetry) { moveToDeadLetter(...); return; }
+long backoffSeconds = 1L << nextRetry;  // 2, 4, 8, 16
+LocalDateTime nextAt = LocalDateTime.now().plusSeconds(backoffSeconds);
+```
+
+| nextRetry | backoff | 다음 시도 시각 | 결과 |
+|---|---|---|---|
+| 1 | 2 sec | now+2s | PENDING 유지, retry_count=1 |
+| 2 | 4 sec | now+4s | PENDING 유지, retry_count=2 |
+| 3 | 8 sec | now+8s | PENDING 유지, retry_count=3 |
+| 4 | 16 sec | now+16s | PENDING 유지, retry_count=4 |
+| 5 | — | — | **DLQ 이관 + 원본 events FAILED** |
+
+**총 4회 재시도 후 5번째 실패에서 DLQ 이관.** `app.outbox.max-retry`(기본 5)로 임계치 설정.
 
 ### 2.5 동시성
 - 워커 여러 인스턴스 실행: Spring Boot 서버 2대 × 기본 1 스레드 = 2 워커
@@ -104,29 +157,36 @@ FOR UPDATE SKIP LOCKED
 - 관리자 전용 인증은 과제 Non-goals라 생략, 설계 문서에만 언급
 
 ### 3.3 메트릭
-- `chat.projection.dead_letter.total{reason}` — 카운터
-- Grafana 경고 룰: 1시간 내 > 0 → Slack/email 알림 (문서로만 기술)
+- `chat.projection.dead_letter` — Counter, `tag: reason=ExceptionClassName` (Micrometer 등록 이름. Prometheus export 시 `chat_projection_dead_letter_total`로 노출)
+- Grafana 경고 룰: 1시간 내 > 0 → Slack/email 알림 (설계만, 미구현)
 
 ## 4. Snapshot 생성
 
-### 4.1 트리거
-- **자동 (주기형):** 세션당 이벤트 100개마다
-  - `session_projection.message_count % 100 == 0` 확인 후 생성
-- **자동 (종료 시):** 세션 `status = ENDED` 전환 시 최종 스냅샷
-- **수동:** `POST /sessions/{id}/snapshots`
+### 4.1 트리거 — 자동화만, 수동 API 없음
+
+상세 규칙은 `docs/05-event-sourcing.md` §3.3을 단일 진실 원본으로 삼는다. 본 절은 비동기 파이프라인 관점의 요약.
+
+| 트리거 | 호출 위치 | 조건 |
+|---|---|---|
+| 이벤트 카운트 기반 | `OutboxPoller.processOne` 직후 `SnapshotService.createSnapshotIfNeeded` | `session_projection.message_count % app.snapshot.event-threshold(=100) == 0` |
+| 세션 종료 봉인 | `SessionService.endSession` → `SnapshotService.createFinalSnapshot` | `latest.lastSequence < session.lastSequence` (잔여 이벤트가 있을 때만) |
+
+**수동 트리거 API(`POST /sessions/{id}/snapshots` 등)는 제공하지 않는다.** 운영자가 강제로 상태를 다시 만들고 싶을 때는 `POST /admin/projections/rebuild?sessionId=...`를 사용해 projection을 재구성한다.
 
 ### 4.2 생성 절차
 ```
-1. 현재 session_projection.last_applied_event_id 기준으로 상태 재구성
-   (가장 최근 snapshot 로드 후 이후 이벤트 리플레이)
-2. snapshot 객체 직렬화 → JSON
-3. INSERT INTO snapshots (session_id, version, last_event_id, last_sequence, state_json)
-4. 오래된 스냅샷 정리 (세션당 최근 3개 유지)
+1. 최신 snapshot 조회. 있으면 deserialize, 없으면 빈 SessionState로 시작
+2. snapshot.lastSequence 이후 이벤트 전체 조회 → StateEventApplier로 순차 apply
+3. 결과 SessionState를 직렬화 (snapshotObjectMapper, ORDER_MAP_ENTRIES_BY_KEYS=true)
+4. INSERT INTO snapshots (session_id, version=prev+1, last_event_id, last_sequence, state_json)
+5. RETENTION=3 — version < (nextVersion - 2) 인 오래된 row를 native DELETE
 ```
 
 ### 4.3 결정론성 보장
-- Snapshot 생성도 `restoreAt(sessionId, at=now)` 알고리즘을 재사용
-- 동일 이벤트 스트림 → 동일 스냅샷 결과 (유닛 테스트 검증)
+- `StateEventApplier`는 외부 시간/랜덤 의존이 없는 순수 함수
+- 직렬화 시 `ORDER_MAP_ENTRIES_BY_KEYS=true` + TreeMap/LinkedHashMap 사용으로 키 순서 안정
+- 동일 이벤트 스트림 → 동일 stateJson (유닛 테스트 `SnapshotServiceTest`에서 검증)
+- `createFinalSnapshot`은 `REQUIRES_NEW` 트랜잭션으로 격리되어 세션 종료 커밋과 독립적으로 실패할 수 있다
 
 ## 5. Idempotency Key 정리
 
@@ -139,15 +199,16 @@ FOR UPDATE SKIP LOCKED
 
 ## 6. 메트릭 (관측)
 
+본 파이프라인이 노출하는 메트릭은 `ChatMetrics`(`src/main/java/com/example/chat/common/metrics/`)에 정의된 실제 구현 기준이다. 자세한 전체 목록은 `docs/07-observability.md` §2 참조.
+
 | 메트릭 | 타입 | 설명 |
 |---|---|---|
-| `chat.outbox.pending.size` | Gauge | 현재 PENDING 이벤트 수 |
-| `chat.outbox.processed.total` | Counter | 성공 처리 누계 |
-| `chat.outbox.failed.total{reason}` | Counter | 실패 누계 |
-| `chat.outbox.dead_letter.total` | Counter | DLQ 이관 누계 |
-| `chat.outbox.lag.seconds` | Gauge | 가장 오래된 PENDING 이벤트의 serverReceivedAt과 now 차이 |
-| `chat.projection.apply.duration` | Histogram | 단일 이벤트 적용 시간 |
-| `chat.snapshot.created.total` | Counter | 스냅샷 생성 누계 |
+| `chat.outbox.pending.size` | Gauge | 현재 PENDING 이벤트 수 (`countByProjectionStatus(PENDING)`) |
+| `chat.outbox.lag.seconds` | Gauge | 가장 오래된 PENDING 이벤트의 `server_received_at`과 now 차이(초) |
+| `chat.projection.dead_letter` | Counter | DLQ 이관 카운터. `tag: reason=ExceptionClassName` |
+
+> 다음 메트릭은 설계 단계에서 거론됐으나 본 구현에는 포함되어 있지 않다 — 추가 도입 시 `ChatMetrics`에 빌드:
+> `chat.outbox.processed.total`, `chat.outbox.failed.total`, `chat.projection.apply.duration`, `chat.snapshot.created.total`.
 
 ## 7. 장애 격리
 
@@ -162,10 +223,8 @@ FOR UPDATE SKIP LOCKED
 - 이벤트 소싱의 핵심 이점 — "이벤트가 진실의 원천, projection은 언제든 재계산 가능"
 
 ### 8.2 API
-- `POST /admin/projections/rebuild?sessionId={id}`
-  - 특정 세션의 `session_projection` row를 지우고 처음부터 이벤트 리플레이로 재구성
-- `POST /admin/projections/rebuild-all`
-  - 전체 재구축 (운영자 수동 실행 가정, 비동기)
+- `POST /admin/projections/rebuild?sessionId={id}` — 특정 세션의 `session_projection` row를 지우고 처음부터 이벤트 리플레이로 재구성 (`AdminProjectionController` + `ProjectionRebuildService`)
+- 전체 재구축(`/rebuild-all`)은 본 구현에 포함되어 있지 않다. 필요 시 세션 ID 목록을 받아 위 엔드포인트를 반복 호출하는 운영 스크립트로 대체.
 
 ### 8.3 구현 플로우
 ```
@@ -177,9 +236,9 @@ FOR UPDATE SKIP LOCKED
 ```
 
 ### 8.4 안전장치
-- 진행 중 세션은 기본 거부 (ACTIVE 세션 재구축 시 경합 가능 → lock + 점검 모드 필요)
-- 단일 세션만 타겟, 전체 재구축은 관리자 수동 트리거
-- 처리 진행률 메트릭 노출: `chat.projection.rebuild.progress`
+- ACTIVE 세션 거부 로직은 두지 않는다. 대신 `sessions` 행에 `PESSIMISTIC_WRITE` 락을 걸어 rebuild와 신규 이벤트 append를 직렬화한다 (`ProjectionRebuildService`가 `findWithLockById`로 동일 락 사용).
+- 단일 세션만 타겟이며, 전체 일괄 재구축은 운영자가 외부 스크립트로 트리거.
+- 처리 진행률 메트릭(`chat.projection.rebuild.progress` 등)은 본 구현에 포함되어 있지 않다 — 추가 시 `ChatMetrics`에 빌드.
 
 ## 9. Rate Limiting / Backpressure (서비스 관점 설계 문서용)
 

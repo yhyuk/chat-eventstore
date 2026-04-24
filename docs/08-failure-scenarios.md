@@ -60,7 +60,7 @@
 - **읽기 경로 임시 degradation**:
   - 복원 API가 DB 조회 실패 시 Redis 캐시만 반환 (최근 N개)
 - **Redis 쓰기 계속 동작**: WebSocket 브로드캐스트 경로 유지 → 실시간 UX 최대한 보존
-- **이벤트 저장 실패 시 클라이언트 재시도 유도**: `ACK`에 `status: RETRY_LATER` 플래그
+- **이벤트 저장 실패 시 클라이언트 재시도 유도** (설계만, 미구현): `ACK`에 `status: RETRY_LATER` 플래그를 두는 안. 본 구현의 `AckFrame.STATUS_*`는 `ACCEPTED`/`DUPLICATE_IGNORED` 두 종만 정의되어 있다.
 
 ### 복구
 1. DBA 개입 또는 자동 복구

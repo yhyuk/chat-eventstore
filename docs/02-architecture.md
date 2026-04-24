@@ -132,25 +132,28 @@ Micrometer Tracing → OpenTelemetry → Zipkin
 | `EDIT` | `{ "targetEventId": 10, "text": "fixed" }` | 메시지 수정 |
 | `DELETE` | `{ "targetEventId": 10 }` | 메시지 삭제 |
 
-### 3.3 이벤트 스키마 (WebSocket 프레임)
+### 3.3 이벤트 스키마 (WebSocket 클라이언트 프레임 — `ClientEventFrame`)
 
 ```json
 {
   "clientEventId": "uuid-v4",
-  "sessionId": 42,
-  "userId": "alice",
   "sequence": 17,
   "type": "MESSAGE",
   "payload": { "text": "hello" },
+  "userId": "alice",
   "clientTimestamp": "2026-04-21T15:00:00.123Z"
 }
 ```
 
 **필드 설명:**
+- `sessionId`는 프레임에 포함하지 않는다 — 핸드셰이크 쿼리 파라미터(`?sessionId=...`)에서 받아 `WebSocketSession.attributes`로 전달된다.
 - `clientEventId`: 클라이언트 생성 UUID, 중복 방지 멱등키
 - `sequence`: 세션 내 단조 증가, 클라이언트가 생성 (재전송 시 동일 유지)
-- `clientTimestamp`: 클라이언트 시각, 순서 tiebreaker
-- `serverReceivedAt` (서버 주입): 최종 정렬 기준
+- `userId`: 핸드셰이크에서 이미 알고 있으므로 생략 가능, 보내도 무시됨
+- `clientTimestamp`: 클라이언트 시각 정보 (정렬에는 사용하지 않음 — PK `(session_id, sequence)`가 결정론을 보장)
+- `serverReceivedAt` (서버 주입): 특정 시점 복원 쿼리에 사용 (`server_received_at <= :at`)
+
+서버 → 클라이언트 프레임은 모두 `{ "frameType": "...", "body": {...} }` envelope으로 직렬화된다. 자세한 구조는 `docs/04-api-spec.md` §3.4 참조.
 
 ## 4. 프로젝트 최상위 구조
 
@@ -180,13 +183,10 @@ chat-eventstore/
 │   ├── 07-observability.md
 │   ├── 08-failure-scenarios.md
 │   ├── 09-testing-and-load.md
-│   ├── 10-query-optimization.md   # 주요 쿼리 2~3개 + 인덱스 근거
-│   ├── adr/                       # 개별 ADR (세부)
-│   │   ├── adr-001-websocket.md
-│   │   ├── adr-002-mysql.md
-│   │   └── ...
-│   ├── diagrams/                  # mermaid, 아키텍처 다이어그램
-│   └── images/                    # 대시보드 스크린샷 등
+│   ├── 10-query-optimization.md   # 주요 쿼리 + 인덱스 근거 + EXPLAIN
+│   ├── 12-ai-harness-engineering.md  # 4역할 AI 페어 프로그래밍 회고
+│   ├── images/                    # 대시보드 스크린샷 등 (CAPTURE.md 가이드 포함)
+│   └── load-test-results/         # k6 결과 JSON
 ├── openapi/
 │   └── openapi.yaml               # 영어 표준 스펙
 ├── scripts/
@@ -214,44 +214,57 @@ chat-eventstore/
 
 ## 5. 패키지 구조 상세
 
+실제 코드 기준 (관측/MDC 관련 클래스는 `common/` 하위에 집약, 별도 `observability/` 패키지 없음).
+
 ```
 com.example.chat
 ├── ChatEventStoreApplication.java
 ├── common/
-│   ├── config/            # WebSocket, Redis, JPA, Observability config
-│   ├── exception/
-│   └── util/
+│   ├── config/            # SchedulingConfig, WebSocketConfig, RedisConfig, WebMvcConfig, QueryDslConfig
+│   ├── exception/         # GlobalExceptionHandler + 도메인 예외 + ErrorCode/ErrorResponse
+│   ├── filter/            # MdcFilter (요청별 MDC traceId/sessionId 주입)
+│   └── metrics/           # ChatMetrics — 6종 커스텀 메트릭 (docs/07 참조)
 ├── session/
-│   ├── controller/        # POST /sessions, GET /sessions, POST /sessions/{id}/end
-│   ├── service/
-│   ├── repository/
-│   └── domain/            # Session, Participant entity
+│   ├── controller/        # SessionController — POST/GET /sessions, POST /sessions/{id}/{join,end}
+│   ├── service/           # SessionService — JOIN 이벤트 자동 append, 종료 시 final snapshot
+│   ├── repository/        # SessionRepository, SessionQueryRepository(Impl) — QueryDSL 동적 필터
+│   ├── dto/
+│   └── domain/            # Session, Participant, SessionStatus
 ├── event/
-│   ├── controller/        # POST /sessions/{id}/events (HTTP fallback + debug)
-│   ├── service/           # EventAppendService, DuplicateDetector, OrderingService
-│   ├── repository/
-│   └── domain/            # Event entity
+│   ├── controller/        # SessionEventController — POST /sessions/{id}/events (fallback)
+│   ├── service/           # EventAppendService — UNIQUE 제약 기반 멱등 + sequence 검증
+│   ├── repository/        # EventRepository, EventIdProjection
+│   ├── dto/
+│   └── domain/            # Event, EventType, ProjectionStatus, EventId
 ├── projection/
-│   ├── worker/            # OutboxPoller @Scheduled
-│   ├── service/           # ProjectionService, SnapshotService
-│   ├── repository/
+│   ├── worker/            # OutboxPoller — 2단계 트랜잭션 + SKIP LOCKED
+│   ├── service/           # ProjectionService, SnapshotService, ProjectionRebuildService, StateEventApplier
+│   ├── controller/        # AdminProjectionController, DlqAdminController
+│   ├── config/            # SnapshotObjectMapperConfig (전용 ObjectMapper Bean)
+│   ├── repository/        # SessionProjectionRepository, SnapshotRepository, DeadLetterEventRepository
+│   ├── dto/
 │   └── domain/            # SessionProjection, Snapshot, DeadLetterEvent
 ├── realtime/
-│   ├── handler/           # ChatWebSocketHandler
-│   ├── interceptor/       # HandshakeInterceptor
+│   ├── handler/           # ChatWebSocketHandler (FrameEnvelope으로 응답 직렬화)
+│   ├── interceptor/       # ChatHandshakeInterceptor (sessionId/userId/lastSequence 검증)
 │   ├── registry/          # SessionRegistry (in-memory Map)
-│   └── pubsub/            # RedisMessagePublisher, RedisMessageSubscriber
+│   ├── pubsub/            # RedisMessagePublisher, RedisMessageSubscriber
+│   ├── service/           # RecentCacheService, ResumeService
+│   └── dto/               # ClientEventFrame, EventBroadcastFrame, AckFrame, ErrorFrame, ResumeBatchFrame, PresenceFrame
 ├── presence/
-│   ├── service/           # PresenceService (Redis SET/TTL)
-│   └── scheduler/         # Heartbeat 관리
-├── restore/
-│   ├── controller/        # GET /sessions/{id}/timeline
-│   └── service/           # EventReplayService, SnapshotReplayService
-└── observability/
-    ├── metrics/           # Micrometer custom metrics
-    ├── tracing/
-    └── logging/           # MDC interceptor
+│   └── service/           # PresenceService (Redis SET + TTL). 별도 scheduler/heartbeat 없음.
+└── restore/
+    ├── controller/        # SessionTimelineController — GET /sessions/{id}/timeline
+    ├── service/           # EventReplayService — Snapshot + Replay 하이브리드
+    └── dto/               # TimelineResponse
 ```
+
+**없는 것 정정:**
+- `observability/` 패키지는 없다. 메트릭은 `common/metrics/ChatMetrics`, MDC 주입은 `common/filter/MdcFilter` + `OutboxPoller` 내부 직접 호출, 추적은 Spring Boot Actuator + Micrometer Tracing의 자동 설정에 의존.
+- `event/service/`에 `DuplicateDetector`, `OrderingService` 같은 별도 클래스 없음 — 모두 `EventAppendService` 내부에서 `UNIQUE(session_id, client_event_id)` 제약과 `sessions.last_sequence` 비교로 구현.
+- `presence/scheduler/` 없음 — heartbeat는 미구현, presence는 Redis TTL만으로 만료 처리.
+- `restore/service/SnapshotReplayService` 없음 — `EventReplayService` 단일 클래스가 스냅샷 로드 + 이벤트 리플레이를 모두 담당.
+- WebSocket 응답 직렬화는 핸들러 내부 `FrameEnvelope` private record가 처리하므로 별도 클래스 불필요.
 
 ## 6. 수평 확장 전략
 

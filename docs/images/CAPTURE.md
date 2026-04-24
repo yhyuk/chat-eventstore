@@ -13,7 +13,7 @@
 
 ## Zipkin Traces
 
-1. 부하/재현 후 http://localhost:9211 접속
+1. 부하/재현 후 http://localhost:9411 접속
 2. "Run Query" → trace 목록에서 임의 trace 선택
 3. Span 계층 보이는 화면 스크린샷
 4. 저장 경로: `docs/images/zipkin-trace.png`

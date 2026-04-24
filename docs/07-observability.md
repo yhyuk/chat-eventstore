@@ -19,21 +19,24 @@
 - DB: HikariCP active/idle connections
 - Tomcat: thread pool, sessions
 
-### 2.2 커스텀 메트릭
+### 2.2 커스텀 메트릭 (`ChatMetrics` 실제 구현 6종)
 
 | 메트릭 | 타입 | 태그 | 목적 |
 |---|---|---|---|
-| `chat.events.received.total` | Counter | `type`, `result` | 수집 이벤트 수 (DUPLICATE_IGNORED 포함) |
-| `chat.events.duplicates.total` | Counter | - | 중복 차단 건수 (SLA 관측) |
-| `chat.events.out_of_order.total` | Counter | - | sequence 역전 감지 건수 |
-| `chat.outbox.pending.size` | Gauge | - | 현재 PENDING 큐 크기 |
-| `chat.outbox.lag.seconds` | Gauge | - | 가장 오래된 PENDING 이벤트 지연 |
-| `chat.projection.apply.duration` | Timer | `type` | 이벤트 적용 시간 분포 |
-| `chat.projection.dead_letter.total` | Counter | `reason` | DLQ 이관 누계 |
-| `chat.websocket.sessions.active` | Gauge | - | 현재 열린 WebSocket 세션 수 (인스턴스별) |
-| `chat.restore.duration.seconds` | Timer | `source`(snapshot/full) | 복원 API 성능 |
-| `chat.redis.pubsub.published.total` | Counter | - | Pub/Sub 발행 건수 |
-| `chat.presence.online.count` | Gauge | - | 현재 online 사용자 수 |
+| `chat.events.received` | Counter | `type`, `result` | 수집 이벤트 수 (`result=ACCEPTED/DUPLICATE_IGNORED/...`) |
+| `chat.events.duplicates` | Counter | - | 중복 차단 건수 |
+| `chat.outbox.pending.size` | Gauge | - | 현재 PENDING 이벤트 수 (`countByProjectionStatus`) |
+| `chat.outbox.lag.seconds` | Gauge | - | 가장 오래된 PENDING 이벤트의 `server_received_at`과 now 차이(초) |
+| `chat.projection.dead_letter` | Counter | `reason` | DLQ 이관 누계 (예외 클래스 단위) |
+| `chat.websocket.sessions.active` | Gauge | - | 현재 활성 WebSocket 세션 수 (인스턴스별) |
+
+**미구현 (설계 단계 거론, 추후 도입 후보):**
+- `chat.events.out_of_order` — 현재는 `InvalidSequenceException`을 ERROR 프레임으로만 응답
+- `chat.projection.apply.duration` (Timer) — 평균 적용 시간 분포
+- `chat.restore.duration.seconds` (Timer) — 복원 API 성능
+- `chat.redis.pubsub.published.total` — Pub/Sub 발행 카운터
+- `chat.presence.online.count` — 현재 online 사용자 수
+- `chat.snapshot.created.total` — 스냅샷 생성 누계
 
 ### 2.3 Prometheus 스크래핑
 ```yaml
@@ -54,35 +57,33 @@ scrape_configs:
 
 ## 3. Grafana 대시보드
 
-### 3.1 App Dashboard (핵심)
-패널 구성:
-1. **이벤트 처리율**: `rate(chat_events_received_total[1m])` (type별 색상)
-2. **중복 차단율**: `rate(chat_events_duplicates_total[1m]) / rate(chat_events_received_total[1m])`
-3. **순서 역전율**: `rate(chat_events_out_of_order_total[1m])`
-4. **아웃박스 lag**: `chat_outbox_lag_seconds` (단일 라인)
-5. **아웃박스 처리량**: `rate(chat_outbox_processed_total[1m])`
-6. **DLQ 카운트**: `chat_outbox_dead_letter_total`
-7. **WebSocket 세션**: `sum(chat_websocket_sessions_active)` (인스턴스 합)
-8. **복원 API p50/p99**: `histogram_quantile(0.99, ...)`
-9. **Presence online count**: `chat_presence_online_count`
+### 3.1 App Dashboard (현재 제공)
 
-### 3.2 MySQL Dashboard
-- 공식 대시보드 ID 7362 import
-- 추가 패널: slow query (>100ms 비율)
+`observability/grafana/dashboards/app.json` 단일 대시보드. 위 §2.2 메트릭 6종을 기준으로 패널을 구성한다.
 
-### 3.3 Redis Dashboard
-- 공식 대시보드 ID 763 import
-- 추가 패널: pub/sub subscribers, channel별 메시지 rate
+권장 패널 구성:
+1. **이벤트 처리율**: `sum by (type, result) (rate(chat_events_received_total[1m]))`
+2. **중복 차단**: `rate(chat_events_duplicates_total[1m])`
+3. **아웃박스 PENDING 큐**: `chat_outbox_pending_size`
+4. **아웃박스 lag**: `chat_outbox_lag_seconds`
+5. **DLQ 누계**: `sum by (reason) (rate(chat_projection_dead_letter_total[5m]))`
+6. **WebSocket 세션**: `sum(chat_websocket_sessions_active)` (인스턴스 합)
+7. **JVM/HTTP 기본 패널**: Spring Boot Actuator 자동 메트릭
 
-### 3.4 자동 프로비저닝
+> 미구현 메트릭(`out_of_order`, `restore.duration`, `presence.online.count` 등)을 참조하는 패널은 빈 그래프로 표시되므로 추가하지 않는다. 필요 시 `ChatMetrics`에 메트릭을 추가한 뒤 패널을 함께 등록.
+
+### 3.2 MySQL / Redis 대시보드 (미제공)
+
+본 구현은 App 대시보드 1종만 제공한다. MySQL / Redis 메트릭은 mysql-exporter / redis-exporter로 Prometheus에 수집되지만, 별도 Grafana 대시보드 JSON은 제공하지 않는다. 평가/운영 시 공식 대시보드(`grafana.com` ID 7362, 763)를 import하면 된다.
+
+### 3.3 자동 프로비저닝 (실제 파일)
 ```
-observability/grafana/provisioning/
-├── datasources/datasource.yml      # Prometheus URL
+observability/grafana/
+├── provisioning/
+│   ├── datasources/datasource.yml      # Prometheus URL (+ Zipkin 데이터소스)
+│   └── dashboards/dashboards.yml       # /var/lib/grafana/dashboards 경로 등록
 └── dashboards/
-    ├── dashboard.yml
-    ├── app.json
-    ├── mysql.json
-    └── redis.json
+    └── app.json                        # 위 App Dashboard
 ```
 
 ## 4. 로깅
@@ -101,10 +102,10 @@ observability/grafana/provisioning/
 </appender>
 ```
 
-### 4.2 MDC 주입
-- `MdcInterceptor` (HTTP) — 요청 시작 시 traceId/spanId/userId 주입, 응답 후 clear
-- `WebSocketMdcWrapper` — WebSocket 메시지 처리 시 동일
-- `OutboxWorkerMdc` — 배치 시작 시 batch_id, 이벤트별 eventId 주입
+### 4.2 MDC 주입 (실제 구현)
+- `common/filter/MdcFilter` (HTTP) — 요청 시작 시 traceId/sessionId 등 주입, 응답 후 clear
+- WebSocket 측 별도 wrapper 클래스는 없음 — 핸들러 내부에서 attribute로 sessionId/userId를 직접 사용
+- `OutboxPoller.drain()` — 배치 시작 시 `MDC.put("batchId", UUID.randomUUID().toString())`, finally 블록에서 `MDC.remove`
 
 ### 4.3 로깅 이벤트 카탈로그
 | 레벨 | 이벤트 | 내용 |
@@ -185,6 +186,6 @@ HTTP /sessions/{id}/timeline
 | 과제 요구 | 대응 구현 |
 |---|---|
 | "로그" | Logback JSON + MDC (traceId/spanId/sessionId/eventId) |
-| "메트릭" | Micrometer → Prometheus → Grafana 대시보드 3종 |
+| "메트릭" | Micrometer → Prometheus → Grafana App 대시보드 1종 (mysql/redis는 공식 대시보드 import 가이드만 제공) |
 | "추적" | Micrometer Tracing + OTel → Zipkin |
 | "운영 대시보드" (가산점) | Grafana 대시보드 + 스크린샷 |

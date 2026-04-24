@@ -88,6 +88,7 @@ erDiagram
         bigint id PK
         bigint original_event_id
         bigint session_id
+        bigint sequence
         varchar event_type
         json payload
         varchar error_message
@@ -199,11 +200,15 @@ CREATE TABLE session_projection (
 - 세션 목록/필터 쿼리용 집계 값 선계산.
 
 ### 2.6 dead_letter_events
+
+V4 최초 생성 후 V6에서 `sequence` 컬럼이 추가되었다. 최종 스키마는 다음과 같다.
+
 ```sql
 CREATE TABLE dead_letter_events (
   id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
   original_event_id   BIGINT NOT NULL,
   session_id          BIGINT NOT NULL,
+  sequence            BIGINT NOT NULL DEFAULT 0,  -- V6에서 추가
   event_type          VARCHAR(20) NOT NULL,
   payload             JSON NOT NULL,
   error_message       VARCHAR(1024) NOT NULL,
@@ -211,13 +216,15 @@ CREATE TABLE dead_letter_events (
   retry_count         INT NOT NULL,
   moved_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_session_moved (session_id, moved_at),
-  INDEX idx_moved (moved_at)
+  INDEX idx_moved (moved_at),
+  INDEX idx_session_sequence (session_id, sequence)  -- V6에서 추가
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
 **설계 근거:**
-- `events.retry_count > MAX_RETRY` 도달 시 이관 (DELETE from events + INSERT here).
+- `events.retry_count > MAX_RETRY` 도달 시 이관 (원본 events는 projection_status=FAILED로 마킹, DLQ로는 INSERT).
 - 운영자가 수동 재처리할 수 있도록 원본 payload 보존.
+- `sequence` 컬럼 추가 근거: DLQ retry API가 원본 events를 복합키 `(session_id, sequence)`로 조회해 PENDING 리셋해야 하므로, 서러게이트 `original_event_id` 대신 복합키로 역조회할 수 있는 경로가 필요. `idx_session_sequence`로 retry 쿼리 효율 확보.
 
 ## 3. 주요 쿼리 (과제 4.4 요구)
 
@@ -235,20 +242,26 @@ FOR UPDATE SKIP LOCKED;
 
 ### 쿼리 2: 특정 시점 복원 (이벤트 리플레이)
 ```sql
--- (a) 가장 가까운 snapshot 찾기
+-- (a) at 시점의 최대 sequence 산출
+SELECT MAX(sequence) FROM events
+WHERE session_id = :sid AND server_received_at <= :at;
+
+-- (b) 가장 가까운 snapshot 찾기 (last_sequence 기준, createdAt 미사용)
+--     비동기 스냅샷의 시각 왜곡을 차단하기 위해 lastSequence로 선택한다.
 SELECT * FROM snapshots
-WHERE session_id = :sid AND created_at <= :at
+WHERE session_id = :sid AND last_sequence <= :maxSeq
 ORDER BY version DESC
 LIMIT 1;
 
--- (b) snapshot 이후 ~ :at 까지 이벤트 리플레이
+-- (c) snapshot 이후 ~ :at 까지 이벤트 리플레이
 SELECT * FROM events
 WHERE session_id = :sid
   AND sequence > :snapshotLastSeq
   AND server_received_at <= :at
-ORDER BY sequence ASC, server_received_at ASC, id ASC;
+ORDER BY sequence ASC;
 ```
-- **사용 인덱스**: PK `(session_id, sequence)` + 보조 `idx_session_received`
+- **사용 인덱스**: PK `(session_id, sequence)` + 보조 `idx_session_received` + `snapshots.idx_session_last_seq`
+- **정렬 키 단일화 근거**: PK `(session_id, sequence)`가 UNIQUE이므로 tiebreaker(`server_received_at`, `id`) 불필요. 결정론은 PK UNIQUE로 충분히 보장된다.
 - **예상 병목**: 스냅샷 없는 오래된 세션 복원 시 풀스캔 가능성 → 개선 방향: 스냅샷 자동화 주기 단축(100 → 50), partitioning by `session_id` 해시 고려.
 
 ### 쿼리 3: 세션 목록 동적 필터
@@ -277,11 +290,12 @@ LIMIT 50;
 
 ```
 src/main/resources/db/migration/
-├── V1__init_sessions_participants.sql
-├── V2__init_events.sql
-├── V3__init_snapshots_projection.sql
-├── V4__init_dead_letter_events.sql
-└── V5__add_indexes.sql (필요 시 분리)
+├── V1__init_sessions_participants.sql    # sessions, participants
+├── V2__init_events.sql                   # events (append-only)
+├── V3__init_snapshots_projection.sql     # snapshots, session_projection
+├── V4__init_dead_letter_events.sql       # dead_letter_events 초기 스키마
+├── V5__create_exporter_user.sql          # mysql-exporter 전용 계정 (관측 스택용)
+└── V6__add_sequence_to_dead_letter_events.sql  # DLQ retry용 sequence 컬럼 + idx_session_sequence
 ```
 
 ## 6. 확장 시 고려사항 (문서용)

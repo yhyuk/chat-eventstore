@@ -8,46 +8,56 @@
 | # | 쿼리 | 핫패스 여부 | 인덱스 |
 |---|---|---|---|
 | Q1 | 아웃박스 워커 PENDING 이벤트 조회 (SKIP LOCKED) | 핫 | `idx_projection_status_retry` |
-| Q2 | 특정 시점 복원 (snapshot + events replay) | 웜 | PK `(session_id, sequence)` + `idx_session_last_seq` |
-| Q3 | 세션 목록 동적 필터 | 일반 | `idx_status_created`, `idx_last_message_at` |
+| Q2 | 특정 시점 복원 (snapshot + events replay) | 웜 | PK `(session_id, sequence)` + `snapshots.idx_session_last_seq` + `events.idx_session_received` |
+| Q3 | 세션 목록 동적 필터 | 일반 | `sessions.idx_status_created`, `session_projection.idx_last_message_at` |
 
 ## 2. Q1 — 아웃박스 워커
 
 ```sql
-SELECT * FROM events
-WHERE projection_status = 'PENDING' AND next_retry_at <= NOW(3)
+-- OutboxPoller는 EventIdProjection(session_id, sequence)만 프로젝션으로 받고
+-- 이벤트 본문은 개별 트랜잭션에서 재조회한다 (영속성 컨텍스트 오염 방지).
+SELECT session_id AS sessionId, sequence AS sequence
+FROM events
+WHERE projection_status = 'PENDING' AND next_retry_at <= CURRENT_TIMESTAMP(3)
 ORDER BY id ASC
-LIMIT 100
+LIMIT :limit
 FOR UPDATE SKIP LOCKED;
 ```
 
 **설계 포인트**
 - `idx_projection_status_retry (projection_status, next_retry_at)` 사용
+- `FAILED` 상태는 SKIP LOCKED 조회 대상에서 제외(재주입은 DLQ retry API가 담당)
 - SKIP LOCKED로 다수 워커 인스턴스 간 row-lock 경합 제거
 - 예상 병목: PENDING 이벤트 누적 시 인덱스 cardinality 저하 → 배치 주기 단축 또는 archive 테이블 분리
-- D7 측정: EXPLAIN, 초당 처리 이벤트 수, Prometheus `chat_outbox_poll_duration_seconds` 분포
+- D7 측정: EXPLAIN, 초당 처리 이벤트 수, Prometheus `chat_outbox_poll_duration_seconds` 분포(미구현 메트릭의 경우 문서상 참고치)
 
 ## 3. Q2 — 특정 시점 복원
 
 ```sql
--- (a) 최근 스냅샷 탐색
+-- (a) at 시점의 최대 sequence 산출
+SELECT MAX(sequence) FROM events
+WHERE session_id = :sid AND server_received_at <= :at;
+
+-- (b) 최근 스냅샷 탐색 — last_sequence 기준 (createdAt 미사용)
+--     비동기 스냅샷의 시각 왜곡을 차단하기 위해 last_sequence로 선택한다.
 SELECT * FROM snapshots
-WHERE session_id = :sid AND created_at <= :at
+WHERE session_id = :sid AND last_sequence <= :maxSeq
 ORDER BY version DESC LIMIT 1;
 
--- (b) 스냅샷 이후 이벤트 리플레이
+-- (c) 스냅샷 이후 이벤트 리플레이 — sequence ASC 단일 키 정렬
 SELECT * FROM events
 WHERE session_id = :sid
   AND sequence > :snapshotLastSeq
   AND server_received_at <= :at
-ORDER BY sequence ASC, server_received_at ASC, id ASC;
+ORDER BY sequence ASC;
 ```
 
 **설계 포인트**
-- PK 순차 스캔이라 range scan 효율적
+- PK `(session_id, sequence)` UNIQUE + clustered index이므로 tiebreaker 없이 결정론 보장. `ORDER BY sequence ASC` 단일 키로 충분.
+- 스냅샷 선택을 `created_at`이 아닌 `last_sequence` 기준으로 하는 이유: OutboxPoller의 비동기 스냅샷 생성과 시각(`created_at`) 간 불일치가 발생할 수 있어 버전 정렬의 안전 기준을 `last_sequence`로 고정.
 - 예상 병목: 스냅샷 주기(`app.snapshot.event-threshold=100`) 대비 세션 수명이 짧을 때 리플레이 길어짐
-- 개선: 세션 종료 시 강제 스냅샷 (D4에서 구현 예정)
-- D7 측정: p50/p95/p99 복원 지연, Prometheus `chat_restore_duration_seconds`
+- 개선: 세션 종료 시 `SnapshotService.createFinalSnapshot`가 REQUIRES_NEW 트랜잭션으로 봉인 스냅샷 생성
+- D7 측정: p50/p95/p99 복원 지연 (미구현 타이머 메트릭의 경우 docs/07에서 관리 범위 명시)
 
 ## 4. Q3 — 세션 목록
 
@@ -76,7 +86,10 @@ LIMIT 50;
 
 > 실행 환경: Docker 컨테이너 내 MySQL 8.x, 소량 데이터(세션 2개, 이벤트 ~10건) 기준
 
-### Q1 — 이벤트 복원 (session_id PK lookup)
+> 라벨 정정: 본 EXPLAIN 캡처는 §1 분류표와 라벨이 뒤바뀐 채 수집되어 있어 그대로 둔다.
+> 아래 "Q1 — 이벤트 복원"은 §3의 Q2(특정 시점 복원), "Q2 — 아웃박스 워커"는 §2의 Q1(아웃박스 워커)에 대응한다.
+
+### Q1 — 이벤트 복원 (session_id PK lookup) — §3의 Q2 대응
 
 ```
 쿼리: SELECT * FROM events WHERE session_id = 1
@@ -91,7 +104,7 @@ EXPLAIN ANALYZE:
 
 **해석:** PK `(session_id, sequence)` clustered index lookup으로 rows=0 (데이터 없음). 실데이터 기준 range scan 비용은 O(N) where N=세션 이벤트 수로, 스냅샷 주기(100개)와 결합 시 최대 100행 이내.
 
-### Q2 — 아웃박스 워커 PENDING 조회
+### Q2 — 아웃박스 워커 PENDING 조회 — §2의 Q1 대응
 
 ```
 쿼리: SELECT * FROM events
@@ -109,7 +122,7 @@ EXPLAIN ANALYZE:
 
 **해석:** `idx_projection_status_retry (projection_status, next_retry_at)` index range scan 정상 동작. rows=8로 인덱스 조건 pushdown 확인. SKIP LOCKED 추가 시 동일 플랜 유지, 다중 워커 경합 없음.
 
-### Q3 — 세션 목록 (status 필터)
+### Q3 — 세션 목록 (status 필터) — §4의 Q3 대응
 
 ```
 쿼리: SELECT s.* FROM sessions s

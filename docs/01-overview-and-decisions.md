@@ -197,11 +197,11 @@ Software Engineer(Backend) 사전 과제 — **1:1 실시간 채팅 + 이벤트 
 3. WebSocket 이벤트 수신 → projection 반영까지 trace로 추적 가능 → 이벤트 소싱 디버깅 실효성 입증.
 4. Zipkin은 Tempo 대비 Docker 구성 경량 → 일주일 예산 안정적.
 
-**결과:**
-- Micrometer + Prometheus → 커스텀 메트릭 7종 이상
-- Logback JSON + MDC (traceId/spanId/sessionId/eventId)
+**결과 (실제 구현):**
+- Micrometer + Prometheus → 커스텀 메트릭 6종 (`ChatMetrics` 기준, 상세는 `docs/07-observability.md` §2.2)
+- Logback JSON + MDC (traceId/spanId/sessionId/batchId)
 - Micrometer Tracing + OpenTelemetry → Zipkin
-- Grafana 대시보드 3종 (App / MySQL / Redis)
+- Grafana App 대시보드 1종 제공 (`observability/grafana/dashboards/app.json`). MySQL/Redis는 mysql-exporter/redis-exporter로 메트릭만 수집되며 별도 대시보드 JSON은 미제공 — 평가/운영 시 공식 대시보드(grafana.com ID 7362, 763) import 가이드만 명시
 
 ---
 
@@ -260,7 +260,7 @@ src/main/java/com/example/chat/
 
 - 설계 문서, ADR, 장애 시나리오, README → **한국어**
 - OpenAPI 스펙 → **영어** (표준 관례)
-- 코드 주석 → **영어** (소스 파일 표준)
+- 코드 주석 → **한국어** (CLAUDE.md 정책. 단순 반복 주석은 작성하지 않고, 비자명한 "왜"만 설명)
 - 커밋 메시지 → Conventional Commits (영어 prefix)
 
 ---

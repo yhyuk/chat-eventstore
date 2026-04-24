@@ -1,22 +1,28 @@
-# 10. 테스트 전략 및 부하 테스트
+# 09. 테스트 전략 및 부하 테스트
 
 ## 1. 전체 전략
 
-| 계층 | 도구 | 범위 | 목표 커버리지 |
+| 계층 | 도구 | 범위 | 실제 파일 수 |
 |---|---|---|---|
-| 단위 테스트 | JUnit 5 + AssertJ + Mockito | 도메인 로직, 순수 함수 | 70%+ |
-| 통합 테스트 | Spring Boot Test + Testcontainers | Controller → DB/Redis E2E | 핵심 시나리오 12개 |
-| 재현 스크립트 | bash + http client | 수동 검증용 | 핵심 시나리오 6개 |
-| 부하 테스트 | k6 | WebSocket 처리량/레이턴시 | 기준값 설정 |
+| 단위 테스트 | JUnit 5 + AssertJ + Mockito | 도메인 로직, 순수 함수 | 13개 (`*Test.java`) |
+| 통합 테스트 | Spring Boot Test + Testcontainers | Controller → DB/Redis E2E | 18개 (`*IntegrationTest.java`) |
+| 공통 헬퍼 | `AbstractIntegrationTest`, `AbstractWebIntegrationTest`, `AbstractFullIntegrationTest`, `SharedContainers` | Testcontainers 베이스 | 4개 |
+| 재현 스크립트 | bash + http client | 수동 검증용 | `scripts/reproduce.sh` + `http/*.http` |
+| 부하 테스트 | k6 | HTTP/WebSocket 처리량/레이턴시 | `scripts/load-test.js` + 결과 JSON |
 
 ## 2. 단위 테스트
 
-### 2.1 대상 클래스
-- `EventReplayService` — 이벤트 리스트 → 상태 결정론적 재구성
-- `DuplicateDetector` — `UNIQUE` 위반 예외 처리 분기
-- `OrderingService` — sequence 역전 정렬 로직
-- `SnapshotService.build()` — 스냅샷 직렬화/역직렬화 왕복
-- `ApplyEvent` 함수 — 타입별 상태 전환
+### 2.1 대상 클래스 (실제 구현)
+
+`event/service/` `EventAppendService` 내부에 중복 감지(`DataIntegrityViolationException` catch)와 순서 검증(`sessions.last_sequence` 비교)이 통합되어 있어, 별도 `DuplicateDetector`/`OrderingService` 클래스는 두지 않는다.
+
+- `EventAppendServiceTest` — UNIQUE 제약 위반 → `DuplicateEventException` 변환, sequence 역전/0 이하 거부
+- `EventReplayServiceTest` — 이벤트 리스트 → 상태 결정론적 재구성
+- `StateEventApplierTest` — 타입별 상태 전환(JOIN/LEAVE/MESSAGE/EDIT/DELETE 등) 순수 함수 검증, 결정론
+- `SnapshotServiceTest` — 스냅샷 트리거 가드, RETENTION=3 정리, REQUIRES_NEW
+- `ProjectionServiceTest` — 카운터 증감 (MESSAGE/JOIN/LEAVE) + EDIT/DELETE 시 변화 없음
+- `OutboxPollerTest` — 2단계 트랜잭션, 재시도 + DLQ 이관
+- `SessionServiceTest` — JOIN 자동 append, end 시 final snapshot 트리거
 
 ### 2.2 핵심 검증 케이스
 ```
@@ -58,7 +64,7 @@ class IntegrationTestBase {
 }
 ```
 
-### 3.2 핵심 시나리오 12개
+### 3.2 핵심 시나리오 (13개)
 
 1. **SessionLifecycle**: `POST /sessions` → `join` → 이벤트 수집 → `end` 전 과정
 2. **EventAppend_Duplicate**: 동일 `clientEventId` 3회 전송 → 1개만 persist, `chat_events_duplicates_total` 카운터 증가
@@ -145,7 +151,7 @@ export const options = {
 };
 
 export default function () {
-  const create = http.post('http://localhost:8081/sessions', JSON.stringify({ createdBy: `u${__VU}` }), {
+  const create = http.post('http://localhost:8081/sessions', '{}', {
     headers: { 'Content-Type': 'application/json' },
     tags: { name: 'create' },
   });
@@ -201,8 +207,7 @@ export default function () {
 
 ## 8. 검증 목록 (제출 전)
 
-- [ ] 단위 테스트 커버리지 70%+ (Jacoco 리포트)
-- [ ] 통합 테스트 13개 모두 통과
-- [ ] 부하 테스트 실행 결과 문서 포함
-- [ ] 재현 스크립트 README에서 링크 및 실행법 명시
-- [ ] k6 summary + Grafana 스크린샷 2~3장 첨부
+- [ ] 단위/통합 테스트 31개(`./gradlew test`) 모두 통과
+- [ ] 부하 테스트 실행 결과(`docs/load-test-results/k6-*.json`) 포함
+- [ ] 재현 스크립트(`scripts/reproduce.sh`) README에서 링크 및 실행법 명시
+- [ ] k6 summary + Grafana 스크린샷 2~3장 첨부 (`docs/images/`)
