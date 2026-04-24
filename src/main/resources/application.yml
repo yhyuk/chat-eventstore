@@ -51,10 +51,11 @@ management:
       instance: ${APP_INSTANCE_ID:local}
   tracing:
     sampling:
+      # 로컬 데모/평가용으로 전량 샘플링. 프로덕션은 0.05~0.1 수준으로 낮출 것.
       probability: 1.0
   zipkin:
     tracing:
-      endpoint: http://localhost:9211/api/v2/spans
+      endpoint: http://localhost:9411/api/v2/spans
 
 app:
   instance-id: ${APP_INSTANCE_ID:local}

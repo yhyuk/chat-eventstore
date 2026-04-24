@@ -54,7 +54,7 @@ chmod +x scripts/export-openapi.sh
 | app2 | http://localhost:7082 | Spring Boot 인스턴스 2 |
 | Grafana | http://localhost:3100 | admin/admin |
 | Prometheus | http://localhost:9190 | — |
-| Zipkin | http://localhost:9211 | — |
+| Zipkin | http://localhost:9411 | — |
 | Actuator health | http://localhost:7081/actuator/health | — |
 | Actuator prometheus | http://localhost:7081/actuator/prometheus | — |
 | Swagger UI | http://localhost:7081/swagger-ui.html | — |

@@ -1,4 +1,5 @@
 FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache wget
 WORKDIR /app
 COPY build/libs/*.jar app.jar
 ENV JAVA_OPTS=""

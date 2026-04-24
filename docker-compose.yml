@@ -44,6 +44,11 @@ services:
       SERVER_PORT: "7081"
     ports: ["7081:7081"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7081/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 40s
 
   app2:
     build: .
@@ -59,6 +64,11 @@ services:
       SERVER_PORT: "7082"
     ports: ["7082:7082"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7082/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 40s
 
   prometheus:
     image: prom/prometheus:latest
@@ -89,8 +99,10 @@ services:
   mysql-exporter:
     image: prom/mysqld-exporter:latest
     container_name: chat-mysql-exporter
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: root
     command:
-      - --mysqld.username=root:root
+      - --mysqld.username=root
       - --mysqld.address=mysql:6306
       - --web.listen-address=:9204
     ports: ["9204:9204"]
@@ -112,10 +124,7 @@ services:
   zipkin:
     image: openzipkin/zipkin:latest
     container_name: chat-zipkin
-    environment:
-      QUERY_PORT: "9211"
-      COLLECTOR_HTTP_PORT: "9211"
-    ports: ["9211:9211"]
+    ports: ["9411:9411"]
 
 volumes:
   mysql-data:
