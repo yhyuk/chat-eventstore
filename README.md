@@ -14,7 +14,19 @@ WebSocket 실시간 통신과 이벤트 소싱을 이용한 특정 시점 상태
 
 ---
 
-## 과제 요구사항 매핑
+## 데모 — 로컬 디버그 UI
+
+서로 다른 인스턴스(app1:7081 ← Alice, app2:7082 ← Bob)에 접속한 두 클라이언트가 Redis Pub/Sub을 통해 실시간 동기화되는 모습. 하단 RAW FRAME LOG에서 TX/RX/ACK 프레임 원본을 직접 확인할 수 있다 — **수평 확장(Stateless + Pub/Sub) 동작 검증용**.
+
+![Debug UI](docs/images/chat-debug-ui.png)
+
+- **좌 Alice · 우 Bob** — 각기 다른 앱 인스턴스에 WebSocket 연결
+- **ACK 배지** — 발신자 측에만 표시됨. 서버가 `events` 테이블 INSERT 성공을 발신자에게 돌려주는 프레임이며, 수신자에게 전달되는 `EVENT` 프레임과는 별개. 수신자 측 "읽음 표시"는 범위 외.
+- **실행:** `docker compose up -d` 후 [`http/chat-debug-ui.html`](http/chat-debug-ui.html)을 브라우저에서 연다.
+
+---
+
+## 요구사항
 
 | 요구사항 | 구현 위치 | 관련 문서 |
 |---|---|---|
