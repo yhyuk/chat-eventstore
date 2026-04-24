@@ -2,53 +2,15 @@
 
 ## 1. 논리 아키텍처
 
-```mermaid
-flowchart TD
-    CA["WebSocket Client A"]
-    CB["WebSocket Client B"]
+![시스템 아키텍처](images/system-architecture.png)
 
-    subgraph APP["App Cluster (Stateless)"]
-        A1["Spring Boot #1<br/>(WebSocket Handler)"]
-        A2["Spring Boot #2<br/>(WebSocket Handler)"]
-    end
-
-    subgraph ASYNC["비동기 파이프라인 (@Scheduled)"]
-        OW["Outbox Worker<br/>(SKIP LOCKED)"]
-        PS["Projection Svc · Snapshot Svc"]
-    end
-
-    DB[("MySQL 8.x<br/>events · sessions · participants<br/>snapshot · projection · DLQ")]
-    R[("Redis<br/>Pub/Sub · Presence(TTL) · Recent N")]
-
-    ME["mysqld-exporter"]
-    RE["redis-exporter"]
-    P["Prometheus"]
-    G["Grafana"]
-    Z["Zipkin<br/>(Micrometer Tracing → OTel)"]
-
-    CA -- "ws://.../ws/chat" --> A1
-    CB -- "ws://.../ws/chat" --> A2
-    A1 <-- "Pub/Sub" --> R
-    A2 <-- "Pub/Sub" --> R
-
-    A1 -- "REST · append" --> DB
-    A2 -- "REST · append" --> DB
-    A1 <-- "Presence · Recent N" --> R
-    A2 <-- "Presence · Recent N" --> R
-
-    DB -.-> OW
-    OW --> PS
-    PS --> DB
-
-    DB --> ME
-    R --> RE
-    ME --> P
-    RE --> P
-    P --> G
-
-    A1 -. "traces" .-> Z
-    A2 -. "traces" .-> Z
-```
+**구성 요약:**
+- **Client** — WebSocket(`/ws/chat`) 및 REST로 앱 클러스터와 통신
+- **App Cluster** — Spring Boot 인스턴스 2대 (Stateless, 수평 확장)
+- **MySQL 8.x** — `events · sessions · participants · snapshot · projection · outbox · DLQ`
+- **Redis** — Pub/Sub · Presence(TTL) · Recent N (Sorted Set)
+- **비동기 파이프라인** — Outbox Worker(`@Scheduled` + `SKIP LOCKED`) → Projection · Snapshot Service
+- **관측 스택** — Prometheus(`mysqld-exporter`, `redis-exporter` 포함) → Grafana, Micrometer Tracing → OpenTelemetry → Zipkin
 
 ## 2. 주요 트래픽 흐름
 
@@ -189,7 +151,7 @@ chat-eventstore/
 │   ├── 09-testing-and-load.md
 │   ├── 10-query-optimization.md   # 주요 쿼리 + 인덱스 근거 + EXPLAIN
 │   ├── 11-ai-harness-engineering.md  # 4역할 AI 페어 프로그래밍 회고
-│   ├── images/                    # 대시보드 스크린샷 등 (CAPTURE.md 가이드 포함)
+│   ├── images/                    # 시스템 아키텍처, Grafana, Zipkin 스크린샷
 │   └── load-test-results/         # k6 결과 JSON
 ├── openapi/
 │   └── openapi.yaml               # 영어 표준 스펙
