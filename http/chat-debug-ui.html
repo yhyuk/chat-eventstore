@@ -70,7 +70,7 @@
 
   .title-bar-text {
     font-family: var(--font-pixel);
-    font-size: 18px;
+    font-size: 22px;
     color: #ffffff;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
     flex: 1;
@@ -109,27 +109,27 @@
 
   .control-label {
     font-family: var(--font-pixel);
-    font-size: 15px;
+    font-size: 18px;
     color: var(--msn-blue-dark);
   }
 
   .control-input {
     font-family: var(--font-mono);
-    font-size: 13px;
-    padding: 4px 8px;
+    font-size: 16px;
+    padding: 6px 10px;
     border: 2px solid var(--msn-border-dark);
     border-radius: 3px;
     background: white;
     color: var(--msn-blue-dark);
-    width: 100px;
+    width: 120px;
     outline: none;
   }
   .control-input:focus { border-color: var(--msn-blue-light); box-shadow: 0 0 4px rgba(0,85,204,0.3); }
 
   .btn {
     font-family: var(--font-pixel);
-    font-size: 14px;
-    padding: 5px 12px;
+    font-size: 17px;
+    padding: 7px 14px;
     border: 2px solid var(--msn-border-dark);
     border-radius: 4px;
     cursor: pointer;
@@ -152,8 +152,8 @@
     color: white;
     text-shadow: 0 1px 1px rgba(0,0,0,0.4);
     box-shadow: 0 2px 0 #661100;
-    font-size: 12px;
-    padding: 4px 8px;
+    font-size: 15px;
+    padding: 6px 12px;
   }
   .btn-danger:hover { background: linear-gradient(180deg, #ffaa88 0%, #dd3311 100%); }
 
@@ -162,14 +162,14 @@
     color: #442200;
     text-shadow: 0 1px 0 rgba(255,255,255,0.3);
     box-shadow: 0 2px 0 #886600;
-    font-size: 12px;
-    padding: 4px 8px;
+    font-size: 15px;
+    padding: 6px 12px;
   }
   .btn-edit:hover { background: linear-gradient(180deg, #ffff99 0%, #ddbb11 100%); }
 
   .btn-small {
-    font-size: 11px;
-    padding: 3px 7px;
+    font-size: 14px;
+    padding: 5px 10px;
     background: linear-gradient(180deg, #eef4ff 0%, #ccdaee 100%);
     color: var(--msn-blue-dark);
     box-shadow: 0 1px 0 #7799bb;
@@ -177,12 +177,12 @@
 
   .session-badge {
     font-family: var(--font-pixel);
-    font-size: 14px;
+    font-size: 17px;
     color: var(--msn-blue-dark);
     background: white;
     border: 2px solid var(--msn-border);
     border-radius: 3px;
-    padding: 3px 10px;
+    padding: 4px 12px;
   }
 
   .status-dot {
@@ -224,21 +224,21 @@
 
   .panel-user {
     font-family: var(--font-pixel);
-    font-size: 16px;
+    font-size: 19px;
     color: var(--msn-blue-dark);
   }
 
   .panel-endpoint {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: #667799;
     margin-left: auto;
   }
 
   .panel-ws-status {
     font-family: var(--font-pixel);
-    font-size: 11px;
-    padding: 1px 6px;
+    font-size: 13px;
+    padding: 2px 8px;
     border-radius: 2px;
     background: rgba(0,0,0,0.08);
   }
@@ -246,16 +246,16 @@
   .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 10px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     background: white;
     background-image: repeating-linear-gradient(
-      0deg, transparent, transparent 23px, rgba(180,210,255,0.15) 23px, rgba(180,210,255,0.15) 24px
+      0deg, transparent, transparent 27px, rgba(180,210,255,0.15) 27px, rgba(180,210,255,0.15) 28px
     );
-    min-height: 200px;
-    max-height: 320px;
+    min-height: 240px;
+    max-height: 420px;
   }
 
   .messages::-webkit-scrollbar { width: 8px; }
@@ -274,12 +274,12 @@
   .msg-row.other { align-self: flex-start; align-items: flex-start; }
 
   .bubble {
-    padding: 6px 10px;
+    padding: 8px 12px;
     border-radius: 4px;
     border: 1px solid var(--msn-bubble-border);
     font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: 16px;
+    line-height: 1.45;
     position: relative;
     word-break: break-word;
   }
@@ -296,24 +296,24 @@
 
   .bubble-sender {
     font-family: var(--font-pixel);
-    font-size: 11px;
+    font-size: 14px;
     color: var(--msn-blue-dark);
-    margin-bottom: 2px;
+    margin-bottom: 3px;
   }
 
   .bubble-meta {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 11px;
     color: #8899aa;
-    margin-top: 2px;
+    margin-top: 3px;
     letter-spacing: 0.3px;
   }
 
   .ack-badge {
     display: inline-block;
-    font-size: 8px;
+    font-size: 10px;
     font-family: var(--font-pixel);
-    padding: 1px 4px;
+    padding: 1px 5px;
     border-radius: 2px;
     margin-left: 3px;
     vertical-align: middle;
@@ -324,9 +324,9 @@
 
   .type-badge {
     display: inline-block;
-    font-size: 8px;
+    font-size: 10px;
     font-family: var(--font-pixel);
-    padding: 1px 4px;
+    padding: 1px 5px;
     border-radius: 2px;
     margin-left: 3px;
   }
@@ -340,12 +340,12 @@
   .sys-msg {
     align-self: center;
     font-family: var(--font-pixel);
-    font-size: 11px;
+    font-size: 14px;
     color: #667799;
     background: rgba(180,210,255,0.3);
     border: 1px dashed var(--msn-border);
     border-radius: 3px;
-    padding: 2px 10px;
+    padding: 3px 12px;
     text-align: center;
   }
 
@@ -368,15 +368,15 @@
   .msg-input {
     flex: 1;
     font-family: var(--font-mono);
-    font-size: 13px;
-    padding: 5px 8px;
+    font-size: 16px;
+    padding: 7px 10px;
     border: 2px solid var(--msn-border-dark);
     border-radius: 3px;
     background: white;
     outline: none;
     resize: none;
-    min-height: 32px;
-    max-height: 64px;
+    min-height: 38px;
+    max-height: 80px;
   }
   .msg-input:focus { border-color: var(--msn-blue-light); box-shadow: 0 0 4px rgba(0,85,204,0.2); }
   .msg-input:disabled { background: #eee; opacity: 0.6; }
@@ -389,7 +389,7 @@
 
   .seq-display {
     font-family: var(--font-pixel);
-    font-size: 11px;
+    font-size: 14px;
     color: #667799;
     margin-left: auto;
   }
@@ -401,12 +401,12 @@
 
   .log-body {
     background: var(--log-bg);
-    padding: 8px 12px;
-    height: 160px;
+    padding: 10px 14px;
+    height: 200px;
     overflow-y: auto;
     font-family: var(--font-mono);
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: 13px;
+    line-height: 1.55;
   }
   .log-body::-webkit-scrollbar { width: 6px; }
   .log-body::-webkit-scrollbar-track { background: #111; }
@@ -429,7 +429,7 @@
   }
   .log-toolbar-text {
     font-family: var(--font-pixel);
-    font-size: 13px;
+    font-size: 16px;
     color: var(--log-green);
   }
 
@@ -498,7 +498,7 @@
     <!-- Alice Panel -->
     <div class="window chat-panel" id="panelAlice">
       <div class="title-bar" style="padding:4px 8px;">
-        <div class="title-bar-text" style="font-size:15px;">Alice</div>
+        <div class="title-bar-text" style="font-size:19px;">Alice</div>
         <span class="status-dot offline" id="dotAlice"></span>
         <span class="panel-ws-status" id="wsStatusAlice" style="color:rgba(255,255,255,0.8);">DISCONNECTED</span>
         <span class="panel-endpoint">app1:7081</span>
@@ -521,7 +521,7 @@
     <!-- Bob Panel -->
     <div class="window chat-panel" id="panelBob">
       <div class="title-bar" style="padding:4px 8px;">
-        <div class="title-bar-text" style="font-size:15px;">Bob</div>
+        <div class="title-bar-text" style="font-size:19px;">Bob</div>
         <span class="status-dot offline" id="dotBob"></span>
         <span class="panel-ws-status" id="wsStatusBob" style="color:rgba(255,255,255,0.8);">DISCONNECTED</span>
         <span class="panel-endpoint">app2:7082</span>
@@ -615,7 +615,10 @@ async function createAndConnect() {
     if (!sid) throw new Error('No sessionId in response: ' + JSON.stringify(data));
     logSys(`Session created: id=${sid}`);
 
-    // 2. alice / bob join (participant 등록 — WebSocket 핸드셰이크 통과에 필요)
+    // 2. alice / bob join — 서버가 participants INSERT + JOIN 이벤트 자동 append
+    //    응답의 lastSequence는 JOIN 이벤트가 점유한 마지막 sequence이므로,
+    //    클라이언트 첫 메시지는 lastSequence + 1부터 시작해야 PK 충돌(INVALID_SEQUENCE)이 없다.
+    let joinLastSequence = 0;
     for (const userId of ['alice', 'bob']) {
       const joinRes = await fetch(`http://localhost:7081/sessions/${sid}/join`, {
         method: 'POST',
@@ -623,8 +626,14 @@ async function createAndConnect() {
         body: JSON.stringify({ userId }),
       });
       if (!joinRes.ok) throw new Error(`JOIN ${userId} HTTP ${joinRes.status}`);
-      logSys(`Joined: userId=${userId}, sessionId=${sid}`);
+      const joinData = await joinRes.json();
+      if (typeof joinData.lastSequence === 'number') {
+        joinLastSequence = Math.max(joinLastSequence, joinData.lastSequence);
+      }
+      logSys(`Joined: userId=${userId}, sessionId=${sid}, lastSequence=${joinData.lastSequence ?? 'n/a'}`);
     }
+    // join 응답을 connectSession에서 활용하기 위해 임시 보관
+    state._postJoinLastSequence = joinLastSequence;
 
     document.getElementById('sessionIdInput').value = sid;
     connectSession(sid);
@@ -634,7 +643,7 @@ async function createAndConnect() {
   }
 }
 
-function connectSession(overrideSid) {
+async function connectSession(overrideSid) {
   const sid = overrideSid ?? parseInt(document.getElementById('sessionIdInput').value);
   if (!sid || isNaN(sid)) { showToast('Session ID를 입력하세요.'); return; }
   state.sessionId = sid;
@@ -643,15 +652,48 @@ function connectSession(overrideSid) {
   document.getElementById('sessionIdDisplay').textContent = sid;
   document.getElementById('disconnectBtn').style.display = '';
 
-  state.sessionSeq = 0;
-  connectWs('alice', sid);
-  connectWs('bob', sid);
+  // 서버가 HTTP /join 시점에 JOIN 이벤트를 sequence=last_sequence+1로 자동 append한다.
+  // 따라서 클라이언트 첫 MESSAGE는 last_sequence+1부터 시작해야 PK 충돌(INVALID_SEQUENCE)을 피할 수 있다.
+  // (1) 방금 createAndConnect에서 join한 직후라면 그 응답의 lastSequence를 우선 사용,
+  // (2) 그 외(이미 존재하는 세션에 connect)라면 GET /timeline에서 replayedEventCount로 추정.
+  if (typeof state._postJoinLastSequence === 'number' && state._postJoinLastSequence > 0) {
+    state.sessionSeq = state._postJoinLastSequence;
+    delete state._postJoinLastSequence;
+  } else {
+    state.sessionSeq = await fetchLastSequence(sid);
+  }
+  logSys(`[INIT] starting sequence = ${state.sessionSeq + 1} (server lastSequence = ${state.sessionSeq})`);
+  connectWs('alice', sid, state.sessionSeq);
+  connectWs('bob', sid, state.sessionSeq);
+}
+
+async function fetchLastSequence(sid) {
+  try {
+    const res = await fetch(`http://localhost:7081/sessions/${sid}/timeline`);
+    if (!res.ok) return 0;
+    const data = await res.json();
+    const msgs = data.messages ?? [];
+    let maxSeqFromMessages = 0;
+    for (const m of msgs) {
+      if (typeof m.sequence === 'number' && m.sequence > maxSeqFromMessages) maxSeqFromMessages = m.sequence;
+    }
+    // timeline은 projection 기준이라 JOIN은 participants에만 반영되고 messages에는 없음.
+    // replayedEventCount가 가장 권위 있는 "현재까지 리플레이된 이벤트 수" — 이는 곧 last_sequence와 같다
+    // (sequence는 1부터 시작하며 gap 없음).
+    const replayed = typeof data.replayedEventCount === 'number' ? data.replayedEventCount : 0;
+    return Math.max(replayed, maxSeqFromMessages);
+  } catch (e) {
+    logErr(`Failed to fetch timeline for seq init: ${e.message}`);
+    return 0;
+  }
 }
 
 // ── WEBSOCKET ──
-function connectWs(user, sessionId) {
+function connectWs(user, sessionId, initialLastSeq = 0) {
   const ep = ENDPOINTS[user];
-  const url = `${ep.ws}/ws/chat?sessionId=${sessionId}&userId=${user}&lastSequence=0`;
+  // lastSequence 를 서버 현재 값으로 보내면 ResumeBatchFrame 가 비어있으므로 우리가 발행한 JOIN 이벤트는 재전송되지 않는다.
+  // 재접속 시엔 누락분만 batch로 내려오고, 신규 세션에선 순수 실시간 스트림만 구독된다.
+  const url = `${ep.ws}/ws/chat?sessionId=${sessionId}&userId=${user}&lastSequence=${initialLastSeq}`;
   setWsStatus(user, 'connecting');
   logSys(`[${user.toUpperCase()}] Connecting to ${url}`);
 
@@ -665,6 +707,7 @@ function connectWs(user, sessionId) {
     enablePanel(user, true);
     addSysMsg(user, `Connected to ${ep.ws}`);
     logSys(`[${user.toUpperCase()}] WebSocket OPEN`);
+    // JOIN 이벤트는 서버가 HTTP POST /sessions/{id}/join 시점에 append한다.
   };
 
   ws.onmessage = (e) => {
@@ -727,59 +770,87 @@ function renderEvent(user, ev) {
   updateSeqDisplay('alice');
   updateSeqDisplay('bob');
 
+  // 내가 보낸 프레임의 서버측 eventId를 sentMessages에 역기록 (EDIT/DELETE targetEventId용).
+  const sent = state[user].sentMessages.find(m => m.cid === ev.clientEventId);
+  if (sent && sent.eventId == null && ev.id != null) {
+    sent.eventId = ev.id;
+  }
+
   const isMine = ev.userId === user;
 
+  // EDIT/DELETE 이벤트는 "내 것"이든 아니든 대상 버블의 DOM을 업데이트해야 한다.
+  if (ev.type === 'EDIT' || ev.type === 'DELETE') {
+    applyTombstoneFromEvent(user, ev);
+    // 자기 자신이 보낸 경우엔 톰스톤 행 메타만 ACK 배지 업데이트
+    if (isMine) {
+      const existing = document.querySelector(
+        `#msgs${capitalize(user)} [data-cid="${ev.clientEventId}"]`
+      );
+      if (existing) {
+        const metaEl = existing.querySelector('.bubble-meta');
+        if (metaEl) metaEl.innerHTML = buildMeta(ev.sequence, ev.type, 'ACCEPTED');
+      }
+    }
+    return;
+  }
+
   if (isMine) {
-    // 내가 보낸 메시지: 낙관적 렌더링된 버블이 이미 있으면 메타만 업데이트
+    // 내가 보낸 MESSAGE: 낙관적 렌더링된 버블이 이미 있으면 메타만 업데이트
     const existing = document.querySelector(
       `#msgs${capitalize(user)} [data-cid="${ev.clientEventId}"]`
     );
     if (existing) {
-      updateBubbleFromEvent(user, ev);
+      const metaEl = existing.querySelector('.bubble-meta');
+      if (metaEl) metaEl.innerHTML = buildMeta(ev.sequence, ev.type, 'ACCEPTED');
       return;
     }
     // 없으면 (예: resume 배치로 온 경우) 우측에 렌더링
   }
 
-  // 상대방 메시지 또는 resume으로 온 내 메시지 — 패널에 렌더링
+  // 상대방 MESSAGE 또는 resume으로 온 내 메시지 — 패널에 렌더링
+  // 서버 표준: MESSAGE payload는 {text}, 다른 키는 fallback.
+  const text = ev.payload?.text ?? ev.payload?.content ?? '';
+  if (ev.type === 'JOIN' || ev.type === 'LEAVE') {
+    addSysMsg(user, `${ev.userId} ${ev.type.toLowerCase()}ed the session`);
+    return;
+  }
   addBubble(user, {
     clientEventId: ev.clientEventId,
     userId: ev.userId,
     type: ev.type,
-    content: ev.payload?.content ?? JSON.stringify(ev.payload),
+    content: text,
     seq: ev.sequence,
     ackStatus: null,
     mine: isMine,
-    targetClientEventId: ev.payload?.targetClientEventId,
   });
 }
 
-function updateBubbleFromEvent(user, ev) {
-  const bubbleEl = document.querySelector(`#msgsAlice [data-cid="${ev.clientEventId}"], #msgsBob [data-cid="${ev.clientEventId}"]`);
-  if (!bubbleEl) return;
-  const metaEl = bubbleEl.querySelector('.bubble-meta');
-  if (metaEl) {
-    metaEl.innerHTML = buildMeta(ev.sequence, ev.type, 'ACCEPTED');
-  }
-
+// EDIT/DELETE가 도착했을 때, 대상 메시지의 DOM을 찾아서 업데이트한다.
+// 서버 payload의 targetEventId(숫자 PK)를 sentMessages에서 매핑해 clientEventId로 역변환 → 기존 버블 탐색.
+function applyTombstoneFromEvent(user, ev) {
+  const targetEventId = ev.payload?.targetEventId;
+  if (targetEventId == null) return;
+  const sent = state[user].sentMessages.find(m => m.eventId === Number(targetEventId))
+            ?? state['alice'].sentMessages.find(m => m.eventId === Number(targetEventId))
+            ?? state['bob'].sentMessages.find(m => m.eventId === Number(targetEventId));
+  const targetCid = sent?.cid;
+  if (!targetCid) return;
+  const row = findBubbleByCid(user, targetCid);
+  if (!row) return;
+  const b = row.querySelector('.bubble');
+  if (!b) return;
   if (ev.type === 'EDIT') {
-    const targetBubble = findBubbleByCid(user, ev.payload?.targetClientEventId);
-    if (targetBubble) {
-      const b = targetBubble.querySelector('.bubble');
-      if (b) {
-        b.classList.add('edited');
-        const contentEl = b.querySelector('.bubble-content');
-        if (contentEl) contentEl.textContent = ev.payload?.content ?? '';
-      }
-    }
+    b.classList.add('edited');
+    const newText = ev.payload?.newText ?? '';
+    const c = b.querySelector('.bubble-content');
+    if (c) c.textContent = newText;
   } else if (ev.type === 'DELETE') {
-    const targetBubble = findBubbleByCid(user, ev.payload?.targetClientEventId);
-    if (targetBubble) {
-      const b = targetBubble.querySelector('.bubble');
-      if (b) { b.classList.add('deleted'); b.querySelector('.bubble-content').textContent = '[deleted]'; }
-    }
+    b.classList.add('deleted');
+    const c = b.querySelector('.bubble-content');
+    if (c) c.textContent = '[deleted]';
   }
 }
+
 
 function handlePresence(fromUser, frame) {
   // Presence broadcast goes to both panels
@@ -806,7 +877,7 @@ function sendMessage(user) {
     clientEventId: cid,
     sequence: seq,
     type: 'MESSAGE',
-    payload: { content },
+    payload: { text: content },
     clientTimestamp: new Date().toISOString(),
     userId: user,
   };
@@ -817,14 +888,15 @@ function sendMessage(user) {
 
   // Optimistic render
   addBubble(user, { clientEventId: cid, userId: user, type: 'MESSAGE', content, seq, ackStatus: 'pending', mine: true });
-  state[user].sentMessages.push({ cid, seq, content });
+  // eventId(서버 PK)는 ACK/EVENT 수신 시 채워진다. EDIT/DELETE가 이 숫자를 targetEventId로 쓴다.
+  state[user].sentMessages.push({ cid, seq, content, eventId: null });
 
   inputEl.value = '';
 }
 
 function editLast(user) {
-  const msgs = state[user].sentMessages;
-  if (!msgs.length) { showToast('보낸 메시지가 없습니다.'); return; }
+  const msgs = state[user].sentMessages.filter(m => m.eventId != null);
+  if (!msgs.length) { showToast('ACK된 메시지가 없습니다. 잠시 후 다시 시도하세요.'); return; }
   const last = msgs[msgs.length - 1];
   const newContent = prompt(`Edit message (seq:${last.seq}):`, last.content);
   if (!newContent || newContent === last.content) return;
@@ -834,11 +906,12 @@ function editLast(user) {
 
   const seq = nextSeq();
   const cid = crypto.randomUUID();
+  // 서버 StateEventApplier는 payload.targetEventId(숫자 PK)와 payload.newText를 읽는다.
   const frame = {
     clientEventId: cid,
     sequence: seq,
     type: 'EDIT',
-    payload: { targetClientEventId: last.cid, content: newContent },
+    payload: { targetEventId: last.eventId, newText: newContent },
     clientTimestamp: new Date().toISOString(),
     userId: user,
   };
@@ -846,7 +919,7 @@ function editLast(user) {
   ws.send(JSON.stringify(frame));
   logTx(`[${user.toUpperCase()}] ${JSON.stringify(frame)}`);
   updateSeqDisplay(user);
-  state[user].sentMessages.push({ cid, seq, content: newContent });
+  state[user].sentMessages.push({ cid, seq, content: newContent, eventId: null });
 
   // Optimistic update bubble
   const targetBubble = findBubbleByCid(user, last.cid);
@@ -862,8 +935,8 @@ function editLast(user) {
 }
 
 function deleteLast(user) {
-  const msgs = state[user].sentMessages;
-  if (!msgs.length) { showToast('보낸 메시지가 없습니다.'); return; }
+  const msgs = state[user].sentMessages.filter(m => m.eventId != null);
+  if (!msgs.length) { showToast('ACK된 메시지가 없습니다. 잠시 후 다시 시도하세요.'); return; }
   const last = msgs[msgs.length - 1];
   if (!confirm(`Delete message (seq:${last.seq}): "${last.content}"?`)) return;
 
@@ -872,11 +945,12 @@ function deleteLast(user) {
 
   const seq = nextSeq();
   const cid = crypto.randomUUID();
+  // 서버 StateEventApplier는 payload.targetEventId(숫자 PK)를 읽는다.
   const frame = {
     clientEventId: cid,
     sequence: seq,
     type: 'DELETE',
-    payload: { targetClientEventId: last.cid },
+    payload: { targetEventId: last.eventId },
     clientTimestamp: new Date().toISOString(),
     userId: user,
   };
@@ -904,7 +978,7 @@ function addBubble(user, { clientEventId, userId, type, content, seq, ackStatus,
 
   if (isTombstone) {
     row.innerHTML = `
-      <div class="bubble" data-cid="${clientEventId}" style="background:#f5f5dd;border-style:dashed;font-size:11px;color:#888;">
+      <div class="bubble" data-cid="${clientEventId}" style="background:#f5f5dd;border-style:dashed;font-size:14px;color:#888;">
         <span class="bubble-content">${escHtml(content)}</span>
         <div class="bubble-meta">${buildMeta(seq, type, ackStatus)}</div>
       </div>`;
