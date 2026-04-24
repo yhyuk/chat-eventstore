@@ -10,5 +10,5 @@ datasources:
   - name: Zipkin
     type: zipkin
     access: proxy
-    url: http://zipkin:9211
+    url: http://zipkin:9411
     editable: true

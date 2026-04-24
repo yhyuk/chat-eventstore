@@ -1,7 +1,7 @@
 {
-  "title": "Chat EventStore — App Dashboard",
+  "title": "Chat EventStore — 운영 대시보드",
   "uid": "chat-app",
-  "version": 1,
+  "version": 3,
   "schemaVersion": 38,
   "refresh": "10s",
   "time": {
@@ -14,7 +14,8 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Events received rate",
+      "title": "실시간 이벤트 수신 처리량 (초당, 타입별)",
+      "description": "과제 4.1 '실시간 메시지 송수신' / '이벤트·메시지 수집 API' 증빙.\n초당 수신된 이벤트 개수를 타입(MESSAGE/JOIN/LEAVE/EDIT/DELETE 등)별로 분해하여 표시. 시스템이 실제 트래픽을 처리 중임을 보여준다.",
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -29,12 +30,17 @@
           "refId": "A"
         }
       ],
-      "fieldConfig": {}
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0"
+        }
+      }
     },
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Duplicates rate",
+      "title": "중복 이벤트 차단 건수 (초당)",
+      "description": "과제 2.1 '중복 이벤트 발생 가능' 제약에 대한 전략 증빙.\n클라이언트 재전송으로 발생한 중복 이벤트를 DB UNIQUE(session_id, client_event_id) 제약이 차단한 횟수. 값이 0보다 크면 중복 감지 경로가 실제 동작 중임을 의미한다.",
       "gridPos": {
         "x": 8,
         "y": 0,
@@ -45,16 +51,21 @@
       "targets": [
         {
           "expr": "sum(rate(chat_events_duplicates_total[1m]))",
-          "legendFormat": "duplicates",
+          "legendFormat": "중복 차단",
           "refId": "A"
         }
       ],
-      "fieldConfig": {}
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0"
+        }
+      }
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "Outbox pending size",
+      "title": "비동기 파이프라인 대기 이벤트 수",
+      "description": "과제 4.2 '비동기 처리 구조 (Projection 업데이트, Snapshot 생성)' 관측.\n아웃박스 워커가 아직 처리하지 못한 PENDING 상태 이벤트 개수. 정상 시 0 근처 유지, 급증하면 projection 파이프라인 정체를 의미한다.",
       "gridPos": {
         "x": 16,
         "y": 0,
@@ -65,7 +76,7 @@
       "targets": [
         {
           "expr": "sum(chat_outbox_pending_size)",
-          "legendFormat": "pending",
+          "legendFormat": "대기 이벤트",
           "refId": "A"
         }
       ],
@@ -76,12 +87,17 @@
         "graphMode": "area",
         "justifyMode": "center"
       },
-      "fieldConfig": {}
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0"
+        }
+      }
     },
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Outbox lag (seconds)",
+      "title": "Projection 반영 지연 시간 (초)",
+      "description": "과제 4.4(2) '비동기 처리 설계 — 재시도, Idempotency' SLO 관측.\n가장 오래된 PENDING 이벤트의 server_received_at 과 현재 시각의 차. 부하 시 lag이 치솟았다가 워커가 따라잡으며 0으로 회복되는 흐름을 보여준다.",
       "gridPos": {
         "x": 0,
         "y": 8,
@@ -91,17 +107,22 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "chat_outbox_lag_seconds",
-          "legendFormat": "{{exported_instance}}",
+          "expr": "max(chat_outbox_lag_seconds)",
+          "legendFormat": "최대 지연",
           "refId": "A"
         }
       ],
-      "fieldConfig": {}
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0"
+        }
+      }
     },
     {
       "id": 5,
       "type": "timeseries",
-      "title": "WebSocket active sessions",
+      "title": "현재 접속 중인 WebSocket 세션 수",
+      "description": "과제 4.1 '실시간 기반 메시지 송수신' + 기본 presence 처리 증빙.\n두 앱 인스턴스(app1+app2) 전체의 활성 WebSocket 세션 합계. 클라이언트 연결/단절에 따라 증감한다.",
       "gridPos": {
         "x": 8,
         "y": 8,
@@ -112,16 +133,21 @@
       "targets": [
         {
           "expr": "sum(chat_websocket_sessions_active)",
-          "legendFormat": "active",
+          "legendFormat": "활성 세션",
           "refId": "A"
         }
       ],
-      "fieldConfig": {}
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0"
+        }
+      }
     },
     {
       "id": 6,
       "type": "stat",
-      "title": "DLQ count",
+      "title": "처리 실패 이벤트 누계 (DLQ)",
+      "description": "과제 4.4(2) 'DLQ, 재시도, Idempotency' / 4.4(3) '데이터 유실·정합성 이슈' 장애 대응 증빙.\n재시도 5회 후에도 projection 적용에 실패하여 Dead Letter Queue 로 이관된 누계. 정상 운영 시 0 유지가 기대값이며, 0 보다 크면 수동 재처리 대상.",
       "gridPos": {
         "x": 16,
         "y": 8,
@@ -132,7 +158,7 @@
       "targets": [
         {
           "expr": "sum(chat_projection_dead_letter_total)",
-          "legendFormat": "dlq",
+          "legendFormat": "DLQ 누계",
           "refId": "A"
         }
       ],
@@ -143,7 +169,11 @@
         "graphMode": "area",
         "justifyMode": "center"
       },
-      "fieldConfig": {}
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0"
+        }
+      }
     }
   ]
 }
