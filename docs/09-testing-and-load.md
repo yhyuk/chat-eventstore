@@ -107,7 +107,7 @@ http/
 - `wscat` 또는 `websocat` (CLI)
 - 예시:
   ```bash
-  websocat "ws://localhost:8081/ws/chat?sessionId=1&userId=alice&lastSequence=0"
+  websocat "ws://localhost:7081/ws/chat?sessionId=1&userId=alice&lastSequence=0"
   # 이후 stdin으로 JSON 프레임 입력
   ```
 
@@ -151,14 +151,14 @@ export const options = {
 };
 
 export default function () {
-  const create = http.post('http://localhost:8081/sessions', '{}', {
+  const create = http.post('http://localhost:7081/sessions', '{}', {
     headers: { 'Content-Type': 'application/json' },
     tags: { name: 'create' },
   });
   const sessionId = create.json('sessionId');
 
   // WebSocket 연결 + 메시지 송신
-  ws.connect(`ws://localhost:8081/ws/chat?sessionId=${sessionId}&userId=u${__VU}`, {}, (socket) => {
+  ws.connect(`ws://localhost:7081/ws/chat?sessionId=${sessionId}&userId=u${__VU}`, {}, (socket) => {
     let seq = 1;
     socket.setInterval(() => {
       socket.send(JSON.stringify({
@@ -173,7 +173,7 @@ export default function () {
   });
 
   // Restore
-  const restore = http.get(`http://localhost:8081/sessions/${sessionId}/timeline?at=${new Date().toISOString()}`, {
+  const restore = http.get(`http://localhost:7081/sessions/${sessionId}/timeline?at=${new Date().toISOString()}`, {
     tags: { name: 'restore' },
   });
   check(restore, { 'restore 200': (r) => r.status === 200 });
@@ -191,6 +191,49 @@ export default function () {
   - 에러율
   - 아웃박스 lag 최대/평균
   - 병목 분석 (만약 있다면)
+
+## 5.5 실측 결과 (2026-04-24)
+
+부하 테스트와 중복 처리 전략 실측을 Grafana 대시보드 한 화면에 담았다.
+
+![Grafana 통합 대시보드 실측](images/grafana-dashboard.png)
+
+### 관측 구간 A: 부하 테스트 (14:30 ~ 14:45, 좌측)
+
+k6 스크립트(`scripts/load-test.js`)로 50 VU × 초당 2 MESSAGE 부하를 인가한 구간.
+
+| 지표 | 피크값 | 회복 후 |
+|---|---|---|
+| 실시간 이벤트 수신 처리량 | 약 230 events/s | 0 |
+| Projection 반영 지연 시간 | 약 600초 (선형 증가) | 0 |
+| WebSocket 활성 세션 수 | 8개 (부하 종료 후 2 → 0) | 0 |
+| DLQ 이관 | 0 건 | 0 건 |
+
+**해석:** 아웃박스 워커의 이론 처리량(`batch-size 100 × 500ms 주기 = 200/s`)을 유입량이 초과하면서 `PENDING` 이벤트가 선형 누적, Projection lag이 600초까지 상승했다. 부하 종료 후 수동 개입 없이 **pending=0 / lag=0으로 자연 회복**. DLQ 이관이 한 건도 없어 이벤트 유실 없이 모두 처리되었다. 이는 ADR-004(DB 아웃박스 채택)가 "이벤트 수집과 projection을 분리하여 수집 경로는 워커 지연과 무관하게 유지한다"는 설계 의도의 실측 검증이다.
+
+### 관측 구간 B: 중복 처리 전략 실측 (15:20 직전, 우측 끝)
+
+동일 `clientEventId`로 500회 연속 전송하여 중복 감지 경로를 검증.
+
+| 지표 | 값 | 의미 |
+|---|---|---|
+| 총 전송 | 501 건 | 최초 1 + 중복 500 |
+| `ACCEPTED` | 1 건 | 최초 요청만 DB 저장 |
+| `DUPLICATE_IGNORED` | 500 건 | 이후 499건 + 최초 이전 중복 1건 모두 멱등 응답 |
+| `chat_events_duplicates_total` 카운터 증분 | 519 | 이전 테스트 누계 포함 |
+| Projection lag | 0 유지 | 중복이 projection 파이프라인에 영향 없음 |
+
+**해석:** UNIQUE(session_id, client_event_id) DB 제약이 **최종 방어선**으로 동작. 이벤트 수신 처리량 패널과 중복 차단 건수 패널이 **동일 시점에 동일 높이의 spike**를 그리는 것은 "들어온 요청의 대부분이 중복이었고 모두 차단되었음"의 직접 증빙이다. 파이프라인/DLQ에 부작용 없음.
+
+### 종합 평가
+
+| 과제 평가 항목 | 대응 증빙 |
+|---|---|
+| 2.1 중복 이벤트 전략 | 구간 B의 중복 차단 spike (500건 차단) |
+| 4.1 실시간 메시지 송수신 | 구간 A의 수신 처리량 + WebSocket 세션 |
+| 4.2 비동기 처리 구조 | 구간 A의 Projection lag 회복 곡선 |
+| 4.4(3) 데이터 유실/정합성 | DLQ = 0 (전 구간 유실 없음) |
+| 가산점 — 부하 테스트 + 운영 대시보드 | 본 스크린샷 전체 |
 
 ## 6. CI 설계 (가산점, 구현은 선택)
 

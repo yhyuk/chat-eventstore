@@ -68,7 +68,7 @@
    - 락 경합: 슬로우 트랜잭션 확인, 인덱스 보강
 2. `/actuator/health/db` UP 전환
 3. Circuit breaker half-open → closed 전환
-4. 아웃박스 워커가 `PENDING` + `FAILED` 이벤트 재처리 (지수 백오프 자동 동작)
+4. 아웃박스 워커가 `PENDING` 이벤트 자동 재처리 (지수 백오프). `FAILED` 이벤트(= 재시도 5회 초과로 DLQ 이관된 건)는 자동 재처리 대상이 아니며, `POST /admin/dlq/{id}/retry` 로 수동 재처리한다.
 5. 리플레이로 유실 검증: 각 세션의 `last_sequence`와 `session_projection.last_applied_event_id` 일치 확인
 
 ### 락 경합 특화 완화

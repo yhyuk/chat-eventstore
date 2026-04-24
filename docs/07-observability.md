@@ -124,51 +124,52 @@ observability/grafana/
 
 ### 5.1 구현
 - `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-zipkin`
-- `ObservationRegistry` 로 span 생성
-- HTTP 요청 자동 span, WebSocket/DB/Redis 수동 span
+- Spring Boot 기본 자동 계측 사용 — HTTP 요청과 `@Scheduled` 메서드가 root span으로 기록된다.
+- W3C Trace Context(`traceparent`) 헤더 자동 전파.
 
-### 5.2 주요 Trace 경로
+### 5.2 수집되는 주요 Trace
 
-**이벤트 수집 trace:**
-```
-HTTP /sessions/{id}/events
-├─ EventAppendService.append
-│   ├─ db.insert (events)
-│   ├─ db.update (sessions.last_sequence)
-│   └─ redis.publish (session:{id})
-```
+본 과제에서는 Spring Boot 3.x 기본 자동 계측만 사용하므로, **outer HTTP span 1개**가 각 요청의 trace로 기록된다.
 
-**WebSocket 메시지 trace (수동 계측):**
-```
-ws.message.received
-├─ EventAppendService.append
-│   └─ (위와 동일)
-```
+| spanName | 의미 |
+|---|---|
+| `http post /sessions` | 세션 생성 |
+| `http post /sessions/{id}/join` | 참여자 등록 |
+| `http post /sessions/{id}/events` | HTTP fallback 이벤트 수집 |
+| `http get /sessions/{id}/timeline` | 특정 시점 상태 복원 |
+| `task outbox-poller.scheduled` | 아웃박스 워커 배치 실행 (500ms 주기) |
+| `http get /actuator/health` | Docker healthcheck |
 
-**아웃박스 trace (batch 단위):**
-```
-outbox.drain (batch_id=...)
-├─ db.select_for_update
-├─ event.apply (eventId=1)
-│   ├─ projection.update
-│   └─ (조건부) snapshot.create
-└─ event.apply (eventId=2)
-```
+### 5.3 실측 예시 — 복원 API trace
 
-**복원 API trace:**
-```
-HTTP /sessions/{id}/timeline
-├─ snapshot.find_latest
-├─ db.events.replay
-└─ state.apply_events
-```
+`GET /sessions/{id}/timeline` 호출에 대한 Zipkin span.
 
-### 5.3 TraceId-LogId 상관관계
-- MDC에 `traceId`, `spanId` 주입 → JSON 로그에 포함 → Zipkin UI에서 trace 조회 시 로그 검색 가능 (수동 grep이나 간이 UI)
+![Zipkin timeline trace](images/zipkin-timeline-trace.png)
 
-### 5.4 Zipkin 설정
+*Duration 81.957ms, Span ID `c67741082cbe2899`, Service `chat-eventstore`.
+Tags에 `http.url=/sessions/4233/timeline`, `method=GET`, `outcome=SUCCESS`, `otel.library=org.springframework.boot 3.3.5` 기록.*
+
+### 5.4 계측 범위와 확장 경로
+
+현재 Zipkin에 수집되는 trace는 **outer HTTP/Scheduled span**으로 한정된다. 내부 JPA 쿼리나 Redis 호출, WebSocket 메시지 핸들링은 자식 span으로 쪼개지지 않는다. 이는 다음 확장 경로를 통해 추가할 수 있으나 본 과제 범위 밖으로 판단했다.
+
+| 계측 대상 | 확장 방법 |
+|---|---|
+| JPA/JDBC 쿼리 단위 | `datasource-micrometer-jdbc` 또는 `opentelemetry-jdbc` 의존성 추가 |
+| Redis 호출 단위 | Lettuce/Jedis tracing 활성화 |
+| 내부 서비스 메서드 | `@Observed` 어노테이션 수동 부착 + `ObservedAspect` 빈 등록 |
+| WebSocket 메시지 | `ChatWebSocketHandler`에 `ObservationRegistry` 주입 + 수동 span 생성 |
+
+단일 인스턴스 운영 환경에서는 Grafana 메트릭(`chat_outbox_lag_seconds`, `chat_projection_apply_duration_seconds`)이 내부 병목 식별을 대신한다. 다만 실제 분산/MSA 환경으로 확장 시에는 위 계측이 **서비스 간 호출 관계 시각화 및 병목 식별**에 필수다.
+
+### 5.5 TraceId-LogId 상관관계
+- MDC에 `traceId`, `spanId` 주입 → JSON 로그에 포함 → Zipkin trace ID로 로그 검색(grep) 가능.
+- 예: 로그의 `"traceId":"b42b6bf552f36d023fee964641aba439"` 값을 Zipkin UI의 `Search by trace ID`에 입력하면 해당 요청의 span을 즉시 조회.
+
+### 5.6 Zipkin 설정
 - Docker 이미지: `openzipkin/zipkin`
 - 포트 9411, 메모리 스토리지 (재시작 시 초기화, 과제용 허용)
+- 샘플링: `management.tracing.sampling.probability=1.0` (로컬/평가용 전량 샘플링, 프로덕션은 0.05~0.1 권장)
 
 ## 6. 부하/테스트 데이터 수집
 
