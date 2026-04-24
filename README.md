@@ -7,6 +7,30 @@
 WebSocket 실시간 통신과 이벤트 소싱 기반의 특정 시점 상태 복원을 다루는 백엔드 프로젝트.
 중복/순서 처리, 수평 확장, DB 설계 및 쿼리 최적화 패턴을 함께 다룬다.
 
+## 시스템 아키텍처
+
+```mermaid
+flowchart TD
+    C["Client<br/>(WebSocket + REST)"]
+
+    subgraph APP["App Cluster · Spring Boot × 2 (Stateless)"]
+        A["app1 :7081<br/>app2 :7082"]
+    end
+
+    DB[("MySQL<br/>events · sessions · projections · outbox<br/><i>+ Outbox Worker, DLQ</i>")]
+    R[("Redis<br/>Pub/Sub · Presence · Recent N")]
+
+    OBS["Observability<br/>Prometheus · Grafana · Zipkin<br/><i>+ mysqld/redis exporter</i>"]
+
+    C -->|"WebSocket / REST"| APP
+    APP -->|"append · query"| DB
+    APP <-->|"Pub/Sub · Presence"| R
+    DB -.->|"outbox poll"| APP
+    APP -.->|"metrics · traces"| OBS
+```
+
+상세 구성 요소와 데이터 흐름은 [docs/02-architecture.md](docs/02-architecture.md) 참조.
+
 ---
 
 ## 빠른 시작
@@ -62,6 +86,38 @@ chmod +x scripts/export-openapi.sh
 ---
 
 ## 아키텍처 요약
+
+### 이벤트 플로우 (Append → Broadcast → Projection → Restore)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant WS as WebSocket Handler
+    participant DB as "MySQL (events + outbox)"
+    participant R as Redis Pub/Sub
+    participant OW as Outbox Worker
+    participant PJ as Projection
+    participant RE as Restore API
+
+    C->>WS: 이벤트 프레임<br/>(clientEventId, sequence)
+    WS->>DB: INSERT event<br/>(UNIQUE: session_id + client_event_id)
+    Note over DB: 중복 시 멱등 처리
+    WS->>DB: INSERT outbox (PENDING)
+    WS->>R: PUBLISH 실시간 브로드캐스트
+    R-->>C: 동일 세션 구독자에게 전달
+
+    loop @Scheduled (SKIP LOCKED)
+        OW->>DB: SELECT outbox WHERE status=PENDING
+        OW->>PJ: apply event
+        PJ->>DB: UPDATE projection
+        OW->>DB: UPDATE outbox SET status=DONE
+    end
+
+    C->>RE: GET /sessions/{id}/timeline?at=T
+    RE->>DB: SELECT events<br/>ORDER BY sequence, server_received_at, id
+    RE-->>C: 결정론적 복원 결과
+```
 
 ### 핵심 기술 선택 (ADR 기반)
 

@@ -2,48 +2,52 @@
 
 ## 1. 논리 아키텍처
 
-```
-┌───────────────────────────┐     ┌───────────────────────────┐
-│   WebSocket Client A       │     │   WebSocket Client B       │
-└─────────────┬─────────────┘     └─────────────┬─────────────┘
-              │ ws://.../ws/chat                 │
-              ▼                                  ▼
-     ┌────────────────┐                 ┌────────────────┐
-     │ Spring Boot #1 │ ◀──Pub/Sub───▶ │ Spring Boot #2 │
-     │  (WebSocket    │                 │  (WebSocket    │
-     │   Handler)     │                 │   Handler)     │
-     └────┬─────┬─────┘                 └────┬─────┬─────┘
-          │     │                            │     │
-   REST   │     │ Outbox Worker              │     │
-   API    │     ▼ @Scheduled                 │     │
-          │     ┌──────────────────┐          │     │
-          │     │ Projection Svc   │          │     │
-          │     │ Snapshot Svc     │          │     │
-          │     └────────┬─────────┘          │     │
-          │              │                    │     │
-          ▼              ▼                    ▼     ▼
-     ┌──────────────────────────┐       ┌─────────────────┐
-     │        MySQL 8.x          │       │      Redis      │
-     │  events / sessions /      │       │ Pub/Sub         │
-     │  participants / snapshot /│       │ Presence (TTL)  │
-     │  projection / DLQ         │       │ Recent N cache  │
-     └──────────────────────────┘       └─────────────────┘
-              │                                  │
-              ▼                                  ▼
-     ┌──────────────────┐               ┌──────────────────┐
-     │ mysql-exporter   │               │ redis-exporter   │
-     └────────┬─────────┘               └────────┬─────────┘
-              └────────────┬────────────────────┘
-                           ▼
-                ┌─────────────────────┐
-                │    Prometheus        │
-                └──────────┬──────────┘
-                           ▼
-                ┌─────────────────────┐
-                │    Grafana           │
-                └─────────────────────┘
+```mermaid
+flowchart TD
+    CA["WebSocket Client A"]
+    CB["WebSocket Client B"]
 
-Micrometer Tracing → OpenTelemetry → Zipkin
+    subgraph APP["App Cluster (Stateless)"]
+        A1["Spring Boot #1<br/>(WebSocket Handler)"]
+        A2["Spring Boot #2<br/>(WebSocket Handler)"]
+    end
+
+    subgraph ASYNC["비동기 파이프라인 (@Scheduled)"]
+        OW["Outbox Worker<br/>(SKIP LOCKED)"]
+        PS["Projection Svc · Snapshot Svc"]
+    end
+
+    DB[("MySQL 8.x<br/>events · sessions · participants<br/>snapshot · projection · DLQ")]
+    R[("Redis<br/>Pub/Sub · Presence(TTL) · Recent N")]
+
+    ME["mysqld-exporter"]
+    RE["redis-exporter"]
+    P["Prometheus"]
+    G["Grafana"]
+    Z["Zipkin<br/>(Micrometer Tracing → OTel)"]
+
+    CA -- "ws://.../ws/chat" --> A1
+    CB -- "ws://.../ws/chat" --> A2
+    A1 <-- "Pub/Sub" --> R
+    A2 <-- "Pub/Sub" --> R
+
+    A1 -- "REST · append" --> DB
+    A2 -- "REST · append" --> DB
+    A1 <-- "Presence · Recent N" --> R
+    A2 <-- "Presence · Recent N" --> R
+
+    DB -.-> OW
+    OW --> PS
+    PS --> DB
+
+    DB --> ME
+    R --> RE
+    ME --> P
+    RE --> P
+    P --> G
+
+    A1 -. "traces" .-> Z
+    A2 -. "traces" .-> Z
 ```
 
 ## 2. 주요 트래픽 흐름
@@ -95,7 +99,7 @@ Micrometer Tracing → OpenTelemetry → Zipkin
 - payload (JSON)
 - clientTimestamp
 - serverReceivedAt
-- projectionStatus: `PENDING`, `PROCESSING`, `DONE`, `FAILED`
+- projectionStatus: `PENDING`, `DONE`, `FAILED` (처리 중 상태는 별도 값 없이 `SELECT ... FOR UPDATE SKIP LOCKED` 행 락으로 대체)
 - retryCount
 - nextRetryAt
 
