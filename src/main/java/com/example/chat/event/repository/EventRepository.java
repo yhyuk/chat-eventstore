@@ -3,6 +3,7 @@ package com.example.chat.event.repository;
 import com.example.chat.event.domain.Event;
 import com.example.chat.event.domain.EventId;
 import com.example.chat.event.domain.ProjectionStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +23,23 @@ public interface EventRepository extends JpaRepository<Event, EventId> {
 
     List<Event> findBySessionIdAndSequenceGreaterThanAndServerReceivedAtLessThanEqualOrderBySequenceAsc(
             Long sessionId, Long sequenceExclusive, LocalDateTime at);
+
+    /**
+     * 채팅 히스토리 페이지네이션 — 최신부터 N개.
+     *
+     * <p>PK가 (session_id, sequence)이므로 인덱스만으로 ORDER BY DESC + LIMIT가 빠르게 동작.
+     * 페이지네이션 첫 페이지(before 미지정)에서 사용한다.
+     */
+    List<Event> findBySessionIdOrderBySequenceDesc(Long sessionId, Pageable pageable);
+
+    /**
+     * 채팅 히스토리 페이지네이션 — before sequence 미만의 N개.
+     *
+     * <p>커서 기반(cursor-based) 페이지네이션. offset 대신 sequence를 커서로 사용해
+     * 메시지가 많아져도 인덱스 점프로 즉시 위치를 찾는다.
+     */
+    List<Event> findBySessionIdAndSequenceLessThanOrderBySequenceDesc(
+            Long sessionId, Long sequenceExclusive, Pageable pageable);
 
     @Query("SELECT MAX(e.sequence) FROM Event e "
             + "WHERE e.sessionId = :sessionId AND e.serverReceivedAt <= :at")

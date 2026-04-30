@@ -294,6 +294,21 @@
   }
   .bubble.edited { border-left: 3px solid #ffaa00 !important; }
 
+  /* 히스토리 API로 불러온 과거 메시지 — 시각적으로 흐리게 표시 */
+  .msg-row.historical .bubble { opacity: 0.65; border-style: dashed; }
+  .msg-row.historical .bubble-sender { opacity: 0.65; }
+  .history-divider {
+    align-self: stretch;
+    text-align: center;
+    margin: 8px 0;
+    padding: 4px 0;
+    font-size: 11px;
+    color: #888;
+    border-top: 1px dashed #aaa;
+    border-bottom: 1px dashed #aaa;
+    background: #f8f8f8;
+  }
+
   .bubble-sender {
     font-family: var(--font-pixel);
     font-size: 14px;
@@ -655,12 +670,19 @@ async function connectSession(overrideSid) {
   // 서버가 HTTP /join 시점에 JOIN 이벤트를 sequence=last_sequence+1로 자동 append한다.
   // 따라서 클라이언트 첫 MESSAGE는 last_sequence+1부터 시작해야 PK 충돌(INVALID_SEQUENCE)을 피할 수 있다.
   // (1) 방금 createAndConnect에서 join한 직후라면 그 응답의 lastSequence를 우선 사용,
-  // (2) 그 외(이미 존재하는 세션에 connect)라면 GET /timeline에서 replayedEventCount로 추정.
+  // (2) 그 외(이미 존재하는 세션에 connect)라면 히스토리 API로 이전 채팅을 화면에 미리 그리고
+  //     그 결과의 max sequence를 사용한다. 빈 세션이거나 호출 실패 시 timeline API로 폴백.
   if (typeof state._postJoinLastSequence === 'number' && state._postJoinLastSequence > 0) {
     state.sessionSeq = state._postJoinLastSequence;
     delete state._postJoinLastSequence;
   } else {
-    state.sessionSeq = await fetchLastSequence(sid);
+    const history = await loadInitialHistory(sid);
+    if (history.maxSequence > 0) {
+      state.sessionSeq = history.maxSequence;
+    } else {
+      // 히스토리가 비었거나 실패한 경우(예: 신규 세션) 기존 경로로 폴백.
+      state.sessionSeq = await fetchLastSequence(sid);
+    }
   }
   logSys(`[INIT] starting sequence = ${state.sessionSeq + 1} (server lastSequence = ${state.sessionSeq})`);
   connectWs('alice', sid, state.sessionSeq);
@@ -685,6 +707,70 @@ async function fetchLastSequence(sid) {
   } catch (e) {
     logErr(`Failed to fetch timeline for seq init: ${e.message}`);
     return 0;
+  }
+}
+
+// 채팅방 진입 시 최근 히스토리(최대 50개)를 양쪽 패널에 미리 그린다.
+// 반환값: { maxSequence, count }
+//   maxSequence — 응답 중 가장 큰 sequence (WebSocket lastSequence 초기값으로 사용).
+//                 0이면 빈 세션.
+//   count       — 화면에 그린 이벤트 수.
+async function loadInitialHistory(sid) {
+  try {
+    const res = await fetch(`http://localhost:7081/sessions/${sid}/messages?limit=50`);
+    if (!res.ok) {
+      logErr(`History fetch failed: HTTP ${res.status}`);
+      return { maxSequence: 0, count: 0 };
+    }
+    const data = await res.json();
+    const messages = data.messages ?? [];
+    if (messages.length === 0) {
+      return { maxSequence: 0, count: 0 };
+    }
+    // 응답은 sequence DESC 정렬 → 화면에 오래된 것부터 그리기 위해 reverse.
+    const ordered = [...messages].reverse();
+    let maxSeq = 0;
+
+    for (const ev of ordered) {
+      if (typeof ev.sequence === 'number' && ev.sequence > maxSeq) maxSeq = ev.sequence;
+
+      // JOIN/LEAVE는 시스템 메시지로, MESSAGE/EDIT/DELETE는 버블로 — renderEvent와 동일한 정책.
+      if (ev.type === 'JOIN' || ev.type === 'LEAVE') {
+        addSysMsg('alice', `[히스토리] ${ev.userId} ${ev.type.toLowerCase()}ed the session`);
+        addSysMsg('bob',   `[히스토리] ${ev.userId} ${ev.type.toLowerCase()}ed the session`);
+        continue;
+      }
+
+      const text = ev.payload?.text ?? ev.payload?.content ?? '';
+
+      // 양쪽 패널 모두에 같은 메시지를 그린다(현재 디버그 UI 정책과 일치).
+      // 각 패널 입장에서 자기가 보낸 것이면 mine=true.
+      ['alice', 'bob'].forEach(panelUser => {
+        addBubble(panelUser, {
+          clientEventId: ev.clientEventId,
+          userId: ev.userId,
+          type: ev.type,
+          content: text,
+          seq: ev.sequence,
+          ackStatus: 'ACCEPTED',
+          mine: ev.userId === panelUser,
+          historical: true,
+        });
+      });
+    }
+
+    addHistoryDivider('alice', `── 이전 메시지 ${ordered.length}개 끝 — 여기부터 새 메시지 ──`);
+    addHistoryDivider('bob',   `── 이전 메시지 ${ordered.length}개 끝 — 여기부터 새 메시지 ──`);
+
+    if (data.hasMore) {
+      logSys(`[HISTORY] 최근 ${ordered.length}개 로드. 더 이전 메시지가 있음 (nextBefore=${data.nextBefore}).`);
+    } else {
+      logSys(`[HISTORY] 전체 ${ordered.length}개 로드 완료.`);
+    }
+    return { maxSequence: maxSeq, count: ordered.length };
+  } catch (e) {
+    logErr(`History fetch error: ${e.message}`);
+    return { maxSequence: 0, count: 0 };
   }
 }
 
@@ -970,10 +1056,11 @@ function deleteLast(user) {
 }
 
 // ── DOM HELPERS ──
-function addBubble(user, { clientEventId, userId, type, content, seq, ackStatus, mine, isTombstone, targetClientEventId }) {
+function addBubble(user, { clientEventId, userId, type, content, seq, ackStatus, mine, isTombstone, targetClientEventId, historical }) {
   const container = document.getElementById(`msgs${capitalize(user)}`);
   const row = document.createElement('div');
-  row.className = `msg-row ${mine ? 'mine' : 'other'}`;
+  // historical=true면 시각 구분(흐리게 + 점선)을 위한 클래스 추가.
+  row.className = `msg-row ${mine ? 'mine' : 'other'}${historical ? ' historical' : ''}`;
   row.dataset.cid = clientEventId;
 
   if (isTombstone) {
@@ -1021,6 +1108,15 @@ function findBubbleByCid(user, cid) {
   if (!cid) return null;
   const container = document.getElementById(`msgs${capitalize(user)}`);
   return container.querySelector(`[data-cid="${cid}"]`)?.closest('.msg-row') ?? null;
+}
+
+function addHistoryDivider(user, text) {
+  // "이전 메시지 / 새 메시지" 경계를 시각적으로 보여주는 구분선.
+  const container = document.getElementById(`msgs${capitalize(user)}`);
+  const el = document.createElement('div');
+  el.className = 'history-divider';
+  el.textContent = text;
+  container.appendChild(el);
 }
 
 function addSysMsg(user, text) {
