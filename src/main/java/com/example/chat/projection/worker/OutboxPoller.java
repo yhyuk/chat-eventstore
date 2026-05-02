@@ -23,6 +23,7 @@ import java.io.StringWriter;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -87,17 +88,23 @@ public class OutboxPoller {
         MDC.put("batchId", UUID.randomUUID().toString());
         try {
             // Step 1: 배치 ID 조회는 별도 트랜잭션에서 수행하여 SKIP LOCKED 행 락을 즉시 해제한다.
-            // 이후 이벤트별로 재조회 + 멱등 처리하는 방식이 안전한 이유는
-            // SessionProjection.last_applied_event_id가 중복 적용을 차단하기 때문.
-            List<EventIdProjection> ids = batchReadTemplate.execute(status ->
+            List<EventIdProjection> projections = batchReadTemplate.execute(status ->
                     eventRepository.fetchPendingEventIds(batchSize));
 
-            if (ids == null || ids.isEmpty()) {
+            if (projections == null || projections.isEmpty()) {
                 return;
             }
 
-            for (EventIdProjection id : ids) {
-                processOne(id.getSessionId(), id.getSequence());
+            List<Long> ids = projections.stream().map(EventIdProjection::getId).toList();
+            Map<Long, Event> eventMap = eventRepository.fetchEventMapByIds(ids);
+
+            for (EventIdProjection projection : projections) {
+                Event event = eventMap.get(projection.getId());
+                if (event == null) {
+                    log.warn("Event not found in batch result: id={}", projection.getId());
+                    continue;
+                }
+                processOne(event);
             }
         } catch (Exception ex) {
             // @Scheduled는 예외를 조용히 삼키므로 여기서 잡아 로그에 남긴다.
@@ -108,15 +115,14 @@ public class OutboxPoller {
         }
     }
 
-    private void processOne(Long sessionId, Long sequence) {
+    private void processOne(Event event) {
         // 첫 트랜잭션: apply + DONE 마킹. apply()가 예외를 던지면 람다 내부에서 잡아
         // 부모 트랜잭션이 projection upsert를 롤백할 수 있게 한 뒤, 상태 UPDATE는
         // 별도 신규 트랜잭션에서 수행한다(롤백된 트랜잭션에 묶이지 않도록).
+        if (event.getProjectionStatus() != ProjectionStatus.PENDING) {
+            return;
+        }
         ApplyFailure failure = eventProcessTemplate.execute(status -> {
-            Event event = eventRepository.findBySessionIdAndSequence(sessionId, sequence).orElse(null);
-            if (event == null || event.getProjectionStatus() != ProjectionStatus.PENDING) {
-                return null;
-            }
             try {
                 projectionService.apply(event);
                 eventRepository.updateProjectionStatus(

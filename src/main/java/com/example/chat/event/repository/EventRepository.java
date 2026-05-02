@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface EventRepository extends JpaRepository<Event, EventId> {
+public interface EventRepository extends JpaRepository<Event, EventId>, EventQueryRepository {
 
     Optional<Event> findBySessionIdAndSequence(Long sessionId, Long sequence);
 
@@ -55,7 +55,7 @@ public interface EventRepository extends JpaRepository<Event, EventId> {
      * FAILED 이벤트는 DLQ로 이관되어 있으므로 재시도 API를 통해서만 재진입한다.
      */
     @Query(
-            value = "SELECT session_id AS sessionId, sequence AS sequence "
+            value = "SELECT id AS id, session_id AS sessionId, sequence AS sequence "
                     + "FROM events "
                     + "WHERE projection_status = 'PENDING' "
                     + "  AND next_retry_at <= CURRENT_TIMESTAMP(3) "

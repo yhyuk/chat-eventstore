@@ -24,7 +24,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,10 +64,9 @@ class OutboxPollerTest {
 
     @Test
     void drain_applies_each_pending_event_and_marks_done() {
-        EventIdProjection id = projection(1L, 1L);
-        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(id));
         Event event = event(10L, 1L, 1L, ProjectionStatus.PENDING, 0);
-        when(eventRepository.findBySessionIdAndSequence(1L, 1L)).thenReturn(Optional.of(event));
+        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(projection(10L, 1L, 1L)));
+        when(eventRepository.fetchEventMapByIds(List.of(10L))).thenReturn(Map.of(10L, event));
 
         poller.drain();
 
@@ -79,10 +78,9 @@ class OutboxPollerTest {
 
     @Test
     void drain_skips_event_that_is_not_pending() {
-        EventIdProjection id = projection(1L, 1L);
-        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(id));
         Event event = event(10L, 1L, 1L, ProjectionStatus.DONE, 0);
-        when(eventRepository.findBySessionIdAndSequence(1L, 1L)).thenReturn(Optional.of(event));
+        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(projection(10L, 1L, 1L)));
+        when(eventRepository.fetchEventMapByIds(List.of(10L))).thenReturn(Map.of(10L, event));
 
         poller.drain();
 
@@ -91,10 +89,9 @@ class OutboxPollerTest {
 
     @Test
     void drain_skips_failed_events_in_persistence_context() {
-        EventIdProjection id = projection(1L, 1L);
-        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(id));
         Event event = event(10L, 1L, 1L, ProjectionStatus.FAILED, 0);
-        when(eventRepository.findBySessionIdAndSequence(1L, 1L)).thenReturn(Optional.of(event));
+        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(projection(10L, 1L, 1L)));
+        when(eventRepository.fetchEventMapByIds(List.of(10L))).thenReturn(Map.of(10L, event));
 
         poller.drain();
 
@@ -103,10 +100,9 @@ class OutboxPollerTest {
 
     @Test
     void drain_increments_retry_count_on_failure() {
-        EventIdProjection id = projection(1L, 1L);
-        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(id));
         Event event = event(10L, 1L, 1L, ProjectionStatus.PENDING, 0);
-        when(eventRepository.findBySessionIdAndSequence(1L, 1L)).thenReturn(Optional.of(event));
+        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(projection(10L, 1L, 1L)));
+        when(eventRepository.fetchEventMapByIds(List.of(10L))).thenReturn(Map.of(10L, event));
         doThrowWhenApply(new RuntimeException("boom"));
 
         poller.drain();
@@ -122,10 +118,9 @@ class OutboxPollerTest {
 
     @Test
     void drain_moves_to_dlq_when_max_retry_exceeded() {
-        EventIdProjection id = projection(1L, 1L);
-        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(id));
         Event event = event(10L, 1L, 1L, ProjectionStatus.PENDING, 4); // next attempt hits max=5
-        when(eventRepository.findBySessionIdAndSequence(1L, 1L)).thenReturn(Optional.of(event));
+        when(eventRepository.fetchPendingEventIds(anyInt())).thenReturn(List.of(projection(10L, 1L, 1L)));
+        when(eventRepository.fetchEventMapByIds(List.of(10L))).thenReturn(Map.of(10L, event));
         doThrowWhenApply(new RuntimeException("boom"));
 
         poller.drain();
@@ -147,7 +142,7 @@ class OutboxPollerTest {
         when(eventRepository.fetchPendingEventIds(anyInt()))
                 .thenThrow(new RuntimeException("db down"));
 
-        // Expect no exception propagation -- scheduler must keep firing next cycle.
+        // 예외가 전파되지 않아야 한다 — 스케줄러 스레드가 다음 사이클에서도 계속 동작.
         poller.drain();
 
         verify(projectionService, never()).apply(any());
@@ -157,8 +152,9 @@ class OutboxPollerTest {
         org.mockito.Mockito.doThrow(ex).when(projectionService).apply(any());
     }
 
-    private EventIdProjection projection(Long sessionId, Long sequence) {
+    private EventIdProjection projection(Long id, Long sessionId, Long sequence) {
         return new EventIdProjection() {
+            @Override public Long getId() { return id; }
             @Override public Long getSessionId() { return sessionId; }
             @Override public Long getSequence() { return sequence; }
         };
