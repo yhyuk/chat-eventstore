@@ -81,16 +81,21 @@ echo
 # ============================================================================
 # Step 2: Join participants
 # ============================================================================
+# join은 서버 측에서 last_sequence+1로 JOIN 이벤트를 자동 append한다.
+# 이후 Step의 클라이언트 sequence는 마지막 join 응답의 lastSequence를 베이스로 채번해야
+# JOIN 이벤트와 PK 충돌(InvalidSequenceException)이 나지 않는다.
 echo "=== Step 2: Join (alice + bob) ==="
-curl -sf -X POST "$BASE/sessions/$SESSION_ID/join" \
+JOIN1=$(curl -sf -X POST "$BASE/sessions/$SESSION_ID/join" \
   -H 'Content-Type: application/json' \
-  -d "{\"userId\": \"$USER1\"}" | jq '.userId' >/dev/null
-echo "✓ $USER1 joined"
+  -d "{\"userId\": \"$USER1\"}")
+echo "✓ $USER1 joined (lastSequence=$(echo "$JOIN1" | jq -r '.lastSequence'))"
 
-curl -sf -X POST "$BASE/sessions/$SESSION_ID/join" \
+JOIN2=$(curl -sf -X POST "$BASE/sessions/$SESSION_ID/join" \
   -H 'Content-Type: application/json' \
-  -d "{\"userId\": \"$USER2\"}" | jq '.userId' >/dev/null
-echo "✓ $USER2 joined"
+  -d "{\"userId\": \"$USER2\"}")
+BASE_SEQ=$(echo "$JOIN2" | jq -r '.lastSequence')
+echo "✓ $USER2 joined (lastSequence=$BASE_SEQ)"
+echo "  → 후속 이벤트 sequence는 $((BASE_SEQ + 1))부터 시작"
 echo
 
 # ============================================================================
@@ -98,17 +103,18 @@ echo
 # ============================================================================
 echo "=== Step 3: Send 5 ordered events ==="
 for i in 1 2 3 4 5; do
+  SEQ=$((BASE_SEQ + i))
   curl -sf -X POST "$BASE/sessions/$SESSION_ID/events" \
     -H 'Content-Type: application/json' \
     -d "{
       \"clientEventId\": \"evt-$i\",
       \"userId\": \"$USER1\",
-      \"sequence\": $i,
+      \"sequence\": $SEQ,
       \"type\": \"MESSAGE\",
       \"payload\": {\"text\": \"message $i\"},
       \"clientTimestamp\": \"$(now_iso)\"
     }" > /dev/null
-  echo "✓ Event $i appended"
+  echo "✓ Event $i appended (sequence=$SEQ)"
 done
 echo
 
@@ -116,12 +122,14 @@ echo
 # Step 4: Send duplicate (same clientEventId, different sequence)
 # ============================================================================
 echo "=== Step 4: Send duplicate (clientEventId='evt-1') ==="
+# 충분히 큰 sequence로 보내 PK 충돌이 아닌 UK(client_event_id) 충돌 경로를 검증한다.
+DUP_SEQ=$((BASE_SEQ + 999))
 DUP_RESPONSE=$(curl -s -X POST "$BASE/sessions/$SESSION_ID/events" \
   -H 'Content-Type: application/json' \
   -d "{
     \"clientEventId\": \"evt-1\",
     \"userId\": \"$USER1\",
-    \"sequence\": 99,
+    \"sequence\": $DUP_SEQ,
     \"type\": \"MESSAGE\",
     \"payload\": {\"text\": \"duplicate!\"},
     \"clientTimestamp\": \"$(now_iso)\"
@@ -132,21 +140,22 @@ echo "  Response: $(echo "$DUP_RESPONSE" | jq '.')"
 echo
 
 # ============================================================================
-# Step 5: Send out-of-order events (sequence 8, 6, 7)
+# Step 5: Send out-of-order events (relative offsets 8, 6, 7)
 # ============================================================================
-echo "=== Step 5: Send out-of-order events (sequences 8, 6, 7) ==="
-for seq in 8 6 7; do
+echo "=== Step 5: Send out-of-order events (offsets 8, 6, 7) ==="
+for offset in 8 6 7; do
+  SEQ=$((BASE_SEQ + offset))
   curl -sf -X POST "$BASE/sessions/$SESSION_ID/events" \
     -H 'Content-Type: application/json' \
     -d "{
-      \"clientEventId\": \"ooo-$seq\",
+      \"clientEventId\": \"ooo-$offset\",
       \"userId\": \"$USER2\",
-      \"sequence\": $seq,
+      \"sequence\": $SEQ,
       \"type\": \"MESSAGE\",
-      \"payload\": {\"text\": \"out-of-order seq=$seq\"},
+      \"payload\": {\"text\": \"out-of-order offset=$offset\"},
       \"clientTimestamp\": \"$(now_iso)\"
     }" > /dev/null
-  echo "✓ Out-of-order event (sequence=$seq) appended"
+  echo "✓ Out-of-order event (sequence=$SEQ, offset=$offset) appended"
 done
 echo
 
